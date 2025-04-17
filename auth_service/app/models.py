@@ -24,9 +24,13 @@ class UserResponse(BaseModel):
     role: str
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 class Token(BaseModel):
-    access_token: str
-    token_type: str
+    token: str
 
 
 class TokenData(BaseModel):

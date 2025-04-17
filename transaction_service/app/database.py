@@ -27,19 +27,21 @@ class TransactionModel(Base):
     vendor_id = Column(String, index=True)
     amount = Column(Float)
     
-    predictions = relationship("PredictionModel", back_populates="transaction")
+    # Relationship to results
+    results = relationship("ResultModel", back_populates="transaction")
 
 
-class PredictionModel(Base):
-    __tablename__ = "predictions"
+class ResultModel(Base):
+    __tablename__ = "results"
     
     id = Column(Integer, primary_key=True, index=True)
     transaction_id = Column(Integer, ForeignKey("transactions.id"))
-    is_fraudulent = Column(Boolean)
-    confidence = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    is_fraud = Column(Boolean)
+    confidence = Column(Float)
     
-    transaction = relationship("TransactionModel", back_populates="predictions")
+    # Relationship to transaction
+    transaction = relationship("TransactionModel", back_populates="results")
 
 
 # Create database tables

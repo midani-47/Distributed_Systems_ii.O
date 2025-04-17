@@ -12,10 +12,9 @@ class TransactionStatus(str, Enum):
 
 class TransactionBase(BaseModel):
     customer: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    status: TransactionStatus = TransactionStatus.SUBMITTED
     vendor_id: str
     amount: float
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
 class TransactionCreate(TransactionBase):
@@ -24,9 +23,10 @@ class TransactionCreate(TransactionBase):
 
 class Transaction(TransactionBase):
     id: int
+    status: TransactionStatus = TransactionStatus.SUBMITTED
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class TransactionInDB(Transaction):
@@ -35,14 +35,16 @@ class TransactionInDB(Transaction):
 
 
 class PredictionCreate(BaseModel):
-    transaction_id: int
     is_fraudulent: bool
     confidence: float
 
 
-class Prediction(PredictionCreate):
+class Prediction(BaseModel):
     id: int
+    transaction_id: int
+    is_fraudulent: bool
+    confidence: float
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:
-        orm_mode = True 
+        from_attributes = True 

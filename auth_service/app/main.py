@@ -1,14 +1,15 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from app.models import Token, UserCreate, UserResponse, User
+from app.models import Token, UserCreate, UserResponse, User, LoginRequest
 from app.database import get_user, create_user, delete_user, initialize_users
-from app.auth import authenticate_user, create_access_token, get_current_user, verify_token
+from app.auth import authenticate_user, create_access_token, verify_token, cleanup_expired_tokens
 from app.logger import get_logger, RequestResponseFilter
 import logging
 import uuid
+import json
 
 # Create logs directory if it doesn't exist
 os.makedirs("../../logs", exist_ok=True)
@@ -17,7 +18,8 @@ os.makedirs("../../logs", exist_ok=True)
 app = FastAPI(
     title="Authentication Service",
     description="Service for user authentication and token management",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs"
 )
 
 # Setup CORS middleware
@@ -44,76 +46,103 @@ async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     client_host = request.client.host if request.client else "unknown"
     
-    # Configure logger with request details
-    log_filter = RequestResponseFilter(
-        source=client_host,
-        destination=f"{request.url.path}",
-        headers=dict(request.headers)
+    # Read request body
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+    
+    # Log request
+    log_data = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "source": client_host,
+        "destination": f"auth_service:8000{request.url.path}",
+        "headers": dict(request.headers),
+        "metadata": {
+            "method": request.method,
+            "path": request.url.path,
+            "query_params": dict(request.query_params),
+        }
+    }
+    
+    # Log body if it exists and is JSON
+    if body:
+        try:
+            log_data["body"] = json.loads(body)
+        except:
+            log_data["body"] = body.decode('utf-8', errors='replace')
+    
+    logger.info(f"Request: {json.dumps(log_data)}")
+    
+    # Create a new request with the already read body
+    new_request = Request(
+        scope=request.scope,
+        receive=request._receive,
     )
     
-    for handler in logger.handlers:
-        handler.addFilter(log_filter)
-    
-    logger.info(f"Request received: {request.method} {request.url.path}")
-    
     # Process the request
-    response = await call_next(request)
+    response = await call_next(new_request)
     
-    logger.info(f"Response sent: {response.status_code}")
+    # Create a response log
+    response_log = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "statusCode": response.status_code,
+        "headers": dict(response.headers),
+    }
     
-    # Clean up filters
-    for handler in logger.handlers:
-        handler.removeFilter(log_filter)
+    logger.info(f"Response: {json.dumps(response_log)}")
     
     return response
 
+# Run token cleanup periodically
+@app.on_event("startup")
+async def startup_cleanup_task():
+    import asyncio
+    
+    async def cleanup_task():
+        while True:
+            cleanup_expired_tokens()
+            await asyncio.sleep(60)  # Run every minute
+    
+    # Start background task
+    asyncio.create_task(cleanup_task())
+
 # Authentication endpoints
-@app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
+@app.post("/api/auth/login", response_model=Token)
+async def login_for_access_token(login_data: LoginRequest):
+    user = authenticate_user(login_data.username, login_data.password)
     if not user:
-        logger.warning(f"Failed login attempt for user: {form_data.username}")
+        logger.warning(f"Failed login attempt for user: {login_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect username or password"
         )
     
-    access_token_expires = timedelta(minutes=30)
-    access_token = create_access_token(
-        data={"sub": user.username, "role": user.role},
-        expires_delta=access_token_expires
+    # Generate token with username and role
+    token = create_access_token(
+        username=user.username,
+        role=user.role
     )
     
     logger.info(f"User logged in successfully: {user.username}")
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"token": token}
 
-@app.get("/users/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_user)):
-    return {"username": current_user.username, "role": current_user.role}
-
-@app.post("/verify-token")
+@app.get("/api/auth/verify")
 async def verify_token_endpoint(token: str):
-    """Verify if a token is valid and return the payload"""
-    payload = verify_token(token)
-    if not payload:
+    """Verify if a token is valid and return role information"""
+    token_data = verify_token(token)
+    if not token_data:
         logger.warning("Token verification failed")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
+        return {"valid": False}
     
-    logger.info(f"Token verified for user: {payload.get('sub')}")
-    return {"valid": True, "payload": payload}
+    logger.info(f"Token verified for user: {token_data['username']}")
+    return {"valid": True, "role": token_data["role"]}
 
 # Admin endpoints for user management
-@app.post("/users", response_model=UserResponse)
-async def create_new_user(
-    user: UserCreate,
-    current_user: User = Depends(get_current_user)
-):
-    if current_user.role != "admin":
-        logger.warning(f"Unauthorized user management attempt by: {current_user.username}")
+@app.post("/api/users", response_model=UserResponse)
+async def create_new_user(user: UserCreate, token: str):
+    token_data = verify_token(token)
+    if not token_data or token_data["role"] != "admin":
+        logger.warning(f"Unauthorized user management attempt")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can manage users"
@@ -130,13 +159,11 @@ async def create_new_user(
     logger.info(f"New user created: {db_user.username}")
     return {"username": db_user.username, "role": db_user.role}
 
-@app.delete("/users/{username}")
-async def remove_user(
-    username: str,
-    current_user: User = Depends(get_current_user)
-):
-    if current_user.role != "admin":
-        logger.warning(f"Unauthorized user deletion attempt by: {current_user.username}")
+@app.delete("/api/users/{username}")
+async def remove_user(username: str, token: str):
+    token_data = verify_token(token)
+    if not token_data or token_data["role"] != "admin":
+        logger.warning(f"Unauthorized user deletion attempt")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can delete users"
