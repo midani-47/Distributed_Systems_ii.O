@@ -4,9 +4,6 @@ import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
-# Ensure logs directory exists
-os.makedirs("../../logs", exist_ok=True)
-
 # Configure formatter with detailed information
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s - [%(source)s:%(destination)s]'
@@ -31,8 +28,15 @@ def get_logger(name, log_file=None):
     
     # Add file handler if specified
     if log_file:
+        # Get the current directory (where the app is running from)
+        # and navigate to the logs directory using OS-agnostic paths
+        logs_dir = os.path.join(os.getcwd(), "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        log_path = os.path.join(logs_dir, log_file)
+        
         file_handler = RotatingFileHandler(
-            f"../../logs/{log_file}",
+            log_path,
             maxBytes=10485760,  # 10MB
             backupCount=5
         )

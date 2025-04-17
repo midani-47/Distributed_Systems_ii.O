@@ -1,10 +1,11 @@
 import requests
+import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.logger import get_logger
 
-# Configure authentication settings
-AUTH_SERVICE_URL = "http://localhost:8080"  # URL of the authentication service
+# Configure authentication settings using environment variable or default to localhost
+AUTH_SERVICE_URL = os.environ.get("AUTH_SERVICE_URL", "http://localhost:8080")
 security = HTTPBearer()
 
 # Configure logger
