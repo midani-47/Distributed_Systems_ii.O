@@ -34,11 +34,13 @@ app.add_middleware(
 # Configure logger
 logger = get_logger("transaction_service", "transaction_service.log")
 
-# Create database tables on startup
-@app.on_event("startup")
-def startup_event():
+# Use lifespan event handlers
+@app.on_event("lifespan")
+async def lifespan(app: FastAPI):
+    # Create database tables on startup
     create_tables()
     logger.info("Transaction Service started and database initialized")
+    yield
 
 # Middleware for request/response logging
 @app.middleware("http")

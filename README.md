@@ -1,125 +1,113 @@
-# Distributed Authentication and Transaction Services
+# Fraud Detection and Authentication System
 
-This project implements a distributed system with two microservices:
-- **Authentication Service**: Manages user authentication and token generation
-- **Transaction Service**: Processes financial transactions with authorization
+This repository contains a distributed system for fraud detection with authentication.
 
-## Platform Compatibility
+## System Components
 
-The implementation is compatible with:
-- Windows
-- macOS
-- Linux
+- **Authentication Service**: Handles user authentication and token management.
+- **Transaction Service**: Manages financial transactions and fraud predictions.
 
-## Requirements
+## Setup and Running the System
 
-- Python 3.7+
-- A virtual environment
+### Prerequisites
 
-## Getting Started
+- Python 3.8 or higher
+- Virtual environment (venv)
 
-### 1. Clone and Setup
+### Setup Virtual Environment
 
 ```bash
-# Clone the repository (if applicable)
-git clone <repository_url>
-cd <project_directory>
-
-# Create and activate a virtual environment
-# For Windows:
+# Create virtual environment
 python -m venv venv
-.\venv\Scripts\activate  # Windows PowerShell
-# OR
-venv\Scripts\activate.bat  # Windows Command Prompt
 
-# For macOS/Linux:
-python3 -m venv venv
+# Activate virtual environment (Linux/Mac)
 source venv/bin/activate
 
-# Install dependencies
+# Activate virtual environment (Windows)
+# venv\Scripts\activate
+```
+
+### Install Required Packages
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Running the Services
+## Running the Services
 
-#### On Windows:
-
-Use the PowerShell scripts for Windows environments:
-
-```powershell
-# Start all services
-.\run_services.ps1
-
-# Test if services are working properly
-.\test_services.ps1
-
-# Stop all services
-.\stop_services.ps1
-```
-
-#### On macOS/Linux:
-
-Use the Bash scripts for Unix-based environments:
+For the simplest and most reliable way to run the services:
 
 ```bash
-# Make scripts executable
-chmod +x run_final.sh stop_services.sh test_services.sh
-
-# Start all services
-./run_final.sh
-
-# Test if services are working properly
-./test_services.sh
-
-# Stop all services
-./stop_services.sh
+# Run both services using the Python script
+python run_services.py
 ```
 
-### 3. API Documentation
+This Python script:
+- Stops any existing services
+- Frees up required ports if needed
+- Starts both Authentication and Transaction services
+- Shows real-time status and provides error information
+- Automatically opens service documentation in your browser
+- Press Ctrl+C to stop all services when done
 
-Once running, you can access the API documentation at:
+The services will be available at:
 - Authentication Service: http://localhost:8080/docs
 - Transaction Service: http://localhost:8081/docs
 
-## Service Architecture
+## API Usage Examples
 
-### Authentication Service (Port 8080)
+### Authentication
 
-- **Login**: `POST /token` - OAuth2 compliant token endpoint
-- **Token verification**: `GET /api/auth/verify` - Verifies token validity
-- **User management**: Admin endpoints for user CRUD operations
+1. Get authentication token:
 
-### Transaction Service (Port 8081)
+```bash
+curl -X 'POST' 'http://localhost:8080/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=admin&password=admin'
+```
 
-- **List transactions**: `GET /transactions` - Returns list of transactions
-- **Create transaction**: `POST /api/transactions` - Create a new transaction
-- **Update transaction**: `PUT /api/transactions/{id}` - Update transaction status
+Response:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
 
-## Troubleshooting
+2. Use the token with Transaction Service:
 
-### Port conflicts
-
-The services require ports 8080 and 8081. If these ports are in use:
-- The startup scripts will attempt to free these ports
-- You can manually stop processes using these ports
-
-### Logging
-
-Log files are stored in the `logs` directory:
-- `auth_service.log` - Authentication service logs
-- `transaction_service.log` - Transaction service logs
-
-### Common Issues
-
-1. **Virtual Environment**: Ensure you have activated the virtual environment
-2. **Port Already in Use**: 
-   - Windows: Use `netstat -ano | findstr :8080` to find the PID using port 8080
-   - Unix: Use `lsof -i:8080` to identify processes using port 8080
-3. **Permission Denied**: Ensure scripts have execution permissions on Unix systems
+```bash
+curl -X 'GET' 'http://localhost:8081/transactions' \
+  -H 'Authorization: Bearer YOUR_TOKEN_HERE'
+```
 
 ## Default Users
 
-The Authentication Service comes with pre-configured users:
-- `admin` / `admin` (Admin role)
-- `agent` / `agent123` (Agent role)
-- `user` / `user123` (User role) 
+- **Admin User**:
+  - Username: admin
+  - Password: admin
+  - Role: admin
+
+- **Agent User**:
+  - Username: agent
+  - Password: agent123
+  - Role: agent
+  
+## Troubleshooting
+
+If you encounter issues:
+
+1. Check the log files in the `logs` directory
+2. Ensure ports 8080 and 8081 are available
+3. Make sure Python dependencies are installed correctly
+
+## Error Logs
+
+Logs are stored in the `logs` directory:
+- Authentication Service: `logs/auth_service.log`
+- Transaction Service: `logs/transaction_service.log`
+
+## Important Notes
+
+- For security purposes, never use the default admin credentials in a production environment.
+- The system is configured to run locally. For production deployment, additional security measures would be required. 

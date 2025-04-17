@@ -34,11 +34,24 @@ app.add_middleware(
 # Configure logger
 logger = get_logger("auth_service", "auth_service.log")
 
-# Initialize users on startup
-@app.on_event("startup")
-def startup_event():
+# Use lifespan event handlers
+@app.on_event("lifespan")
+async def lifespan(app: FastAPI):
+    # Initialize users on startup
     initialize_users()
     logger.info("Authentication Service started and users initialized")
+    
+    # Run token cleanup periodically
+    import asyncio
+    async def cleanup_task():
+        while True:
+            cleanup_expired_tokens()
+            await asyncio.sleep(60)  # Run every minute
+    
+    # Start background task
+    asyncio.create_task(cleanup_task())
+    
+    yield
 
 # Middleware for request/response logging
 @app.middleware("http")
@@ -92,19 +105,6 @@ async def log_requests(request: Request, call_next):
     logger.info(f"Response: {json.dumps(response_log)}")
     
     return response
-
-# Run token cleanup periodically
-@app.on_event("startup")
-async def startup_cleanup_task():
-    import asyncio
-    
-    async def cleanup_task():
-        while True:
-            cleanup_expired_tokens()
-            await asyncio.sleep(60)  # Run every minute
-    
-    # Start background task
-    asyncio.create_task(cleanup_task())
 
 # Authentication endpoints
 @app.post("/token", response_model=Token)
