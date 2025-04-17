@@ -26,7 +26,12 @@ class Transaction(TransactionBase):
     status: TransactionStatus = TransactionStatus.SUBMITTED
     
     class Config:
-        from_attributes = True
+        # Support both new and old pydantic
+        try:
+            from_attributes = True
+        except ImportError:
+            # Fallback for older pydantic
+            orm_mode = True
 
 
 class TransactionInDB(Transaction):
@@ -47,4 +52,9 @@ class Prediction(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:
-        from_attributes = True 
+        # Support both new and old pydantic
+        try:
+            from_attributes = True
+        except ImportError:
+            # Fallback for older pydantic
+            orm_mode = True 

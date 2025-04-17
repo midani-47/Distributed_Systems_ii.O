@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.logger import get_logger
 
 # Configure authentication settings
-AUTH_SERVICE_URL = "http://localhost:8000"  # URL of the authentication service
+AUTH_SERVICE_URL = "http://localhost:8080"  # URL of the authentication service
 security = HTTPBearer()
 
 # Configure logger
@@ -15,6 +15,10 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
     Verify token with the Authentication Service
     """
     token = credentials.credentials
+    
+    # Remove "Bearer " prefix if included again in the token
+    if token.startswith("Bearer "):
+        token = token[7:]
     
     try:
         response = requests.get(

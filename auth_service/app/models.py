@@ -35,4 +35,12 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
-    role: Optional[str] = None 
+    role: Optional[str] = None
+
+    class Config:
+        # Support both new and old pydantic
+        try:
+            from_attributes = True
+        except ImportError:
+            # Fallback for older pydantic
+            orm_mode = True 
