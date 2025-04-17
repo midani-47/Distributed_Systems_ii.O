@@ -12,7 +12,7 @@ from app.auth import verify_token, require_role
 from app.logger import get_logger, RequestResponseFilter
 
 # Create logs directory if it doesn't exist
-os.makedirs("../../logs", exist_ok=True)
+os.makedirs("logs", exist_ok=True)
 
 # Create and configure the application
 app = FastAPI(
@@ -55,7 +55,7 @@ async def log_requests(request: Request, call_next):
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
         "source": client_host,
-        "destination": f"transaction_service:8001{request.url.path}",
+        "destination": f"transaction_service:{port}{request.url.path}",
         "headers": dict(request.headers),
         "metadata": {
             "method": request.method,
@@ -116,6 +116,25 @@ async def create_transaction(
     
     logger.info(f"Transaction created: ID={db_transaction.id}, Customer={transaction.customer}")
     return db_transaction
+
+# New endpoint with simpler URL structure
+@app.get("/transactions", response_model=List[Transaction])
+async def read_transactions_simple(
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[TransactionStatus] = None,
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(verify_token)
+):
+    query = db.query(TransactionModel)
+    
+    # Apply status filter if provided
+    if status:
+        query = query.filter(TransactionModel.status == status)
+    
+    transactions = query.offset(skip).limit(limit).all()
+    logger.info(f"Retrieved {len(transactions)} transactions")
+    return transactions
 
 @app.get("/api/transactions", response_model=List[Transaction])
 async def read_transactions(
@@ -261,4 +280,6 @@ async def read_transaction_results(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8081, reload=True) 
+    # Get port from environment variable or use default 8081
+    port = int(os.environ.get("TRANSACTION_PORT", 8081))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True) 

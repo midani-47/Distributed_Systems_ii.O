@@ -12,7 +12,7 @@ import uuid
 import json
 
 # Create logs directory if it doesn't exist
-os.makedirs("../../logs", exist_ok=True)
+os.makedirs("logs", exist_ok=True)
 
 # Create and configure the application
 app = FastAPI(
@@ -55,7 +55,7 @@ async def log_requests(request: Request, call_next):
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
         "source": client_host,
-        "destination": f"auth_service:8000{request.url.path}",
+        "destination": f"auth_service:{port}{request.url.path}",
         "headers": dict(request.headers),
         "metadata": {
             "method": request.method,
@@ -107,8 +107,28 @@ async def startup_cleanup_task():
     asyncio.create_task(cleanup_task())
 
 # Authentication endpoints
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        logger.warning(f"Failed login attempt for user: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password"
+        )
+    
+    # Generate token with username and role
+    token = create_access_token(
+        username=user.username,
+        role=user.role
+    )
+    
+    logger.info(f"User logged in successfully: {user.username}")
+    return {"access_token": token, "token_type": "bearer"}
+
+# Also keep the original endpoint for backward compatibility
 @app.post("/api/auth/login", response_model=Token)
-async def login_for_access_token(login_data: LoginRequest):
+async def login_for_access_token_legacy(login_data: LoginRequest):
     user = authenticate_user(login_data.username, login_data.password)
     if not user:
         logger.warning(f"Failed login attempt for user: {login_data.username}")
@@ -182,4 +202,6 @@ async def remove_user(username: str, token: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=True) 
+    # Get port from environment variable or use default 8080
+    port = int(os.environ.get("AUTHENTICATION_PORT", 8080))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True) 

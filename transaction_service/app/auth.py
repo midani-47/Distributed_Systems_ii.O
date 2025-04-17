@@ -63,20 +63,21 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
             detail="Authentication service unavailable"
         )
 
-def require_role(allowed_roles):
+def require_role(allowed_roles: list):
     """
-    Dependency to check if user has required role
+    Check if the user has one of the allowed roles
     """
     async def role_checker(user_data: dict = Depends(verify_token)):
-        user_role = user_data.get("role")
+        role = user_data.get("role")
         
-        if user_role not in allowed_roles:
-            logger.warning(f"Access denied for role {user_role}")
+        if role not in allowed_roles:
+            logger.warning(f"Authorization failed: Role {role} not in {allowed_roles}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied: role {user_role} not allowed"
+                detail=f"Not authorized. Required roles: {', '.join(allowed_roles)}"
             )
         
+        logger.info(f"Authorization successful for role: {role}")
         return user_data
     
     return role_checker 
