@@ -9,8 +9,10 @@ import webbrowser
 from pathlib import Path
 import atexit
 
-# Current working directory
-cwd = os.getcwd()
+# Print some debug information
+print(f"Current working directory: {os.getcwd()}")
+print(f"Python executable: {sys.executable}")
+print(f"Platform: {platform.system()}")
 
 # Function to check if a port is in use
 def is_port_in_use(port):
@@ -86,23 +88,20 @@ for log_file in Path("logs").glob("*.log"):
 
 print("Starting services...")
 
-# Activate virtual environment
-if platform.system() == "Windows":
-    venv_activate = os.path.join("venv", "Scripts", "activate")
-    python_cmd = "python"
-else:
-    venv_activate = os.path.join("venv", "bin", "activate")
-    python_cmd = "python3" if os.system("command -v python3 > /dev/null") == 0 else "python"
+# Determine Python executable to use
+python_cmd = sys.executable
+print(f"Using Python executable: {python_cmd}")
 
 # Start Authentication Service
 print(f"Starting Authentication Service on port {auth_port}...")
 auth_env = os.environ.copy()
 auth_env["AUTHENTICATION_PORT"] = str(auth_port)
+auth_env["PYTHONPATH"] = os.getcwd() + "/auth_service"
 
 try:
     os.chdir("auth_service")
     auth_process = subprocess.Popen(
-        [python_cmd, "-m", "app.main"],
+        [python_cmd, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", str(auth_port)],
         env=auth_env,
         stdout=open(os.path.join("..", "logs", "auth_service.log"), "w"),
         stderr=subprocess.STDOUT
@@ -119,11 +118,12 @@ except Exception as e:
 print(f"Starting Transaction Service on port {transaction_port}...")
 transaction_env = os.environ.copy()
 transaction_env["TRANSACTION_PORT"] = str(transaction_port)
+transaction_env["PYTHONPATH"] = os.getcwd() + "/transaction_service"
 
 try:
     os.chdir("transaction_service")
     transaction_process = subprocess.Popen(
-        [python_cmd, "-m", "app.main"],
+        [python_cmd, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", str(transaction_port)],
         env=transaction_env,
         stdout=open(os.path.join("..", "logs", "transaction_service.log"), "w"),
         stderr=subprocess.STDOUT
@@ -138,8 +138,8 @@ except Exception as e:
     sys.exit(1)
 
 # Wait for services to start
-print("Waiting for services to initialize (5 seconds)...")
-time.sleep(5)
+print("Waiting for services to initialize (10 seconds)...")
+time.sleep(10)
 
 # Test if services are responsive
 print("\nTesting services:")
@@ -149,8 +149,10 @@ transaction_url = f"http://localhost:{transaction_port}/docs"
 def check_service(url, name):
     try:
         import urllib.request
-        response = urllib.request.urlopen(url, timeout=2)
+        print(f"Attempting to connect to {url}")
+        response = urllib.request.urlopen(url, timeout=5)
         status = response.status
+        print(f"Response status: {status}")
         if status == 200:
             print(f"✅ {name} is running: {url}")
             return True
@@ -165,22 +167,24 @@ auth_ok = check_service(auth_url, "Authentication Service")
 transaction_ok = check_service(transaction_url, "Transaction Service")
 
 if not auth_ok or not transaction_ok:
-    print("\nSome services failed to start. Check logs for details:")
+    print("\nSome services failed to start. Checking logs for details:")
     if not auth_ok:
         print("Authentication Service logs:")
         try:
             with open(os.path.join("logs", "auth_service.log"), "r") as f:
-                print(f.read())
-        except:
-            print("Could not read log file")
+                log_content = f.read()
+                print(log_content[-2000:] if len(log_content) > 2000 else log_content)  # Show last 2000 chars only
+        except Exception as e:
+            print(f"Could not read log file: {e}")
     
     if not transaction_ok:
         print("Transaction Service logs:")
         try:
             with open(os.path.join("logs", "transaction_service.log"), "r") as f:
-                print(f.read())
-        except:
-            print("Could not read log file")
+                log_content = f.read()
+                print(log_content[-2000:] if len(log_content) > 2000 else log_content)  # Show last 2000 chars only
+        except Exception as e:
+            print(f"Could not read log file: {e}")
     
     print("\nPress Ctrl+C to stop services and exit")
 
@@ -197,11 +201,12 @@ print("="*60)
 
 # Attempt to open services in browser
 try:
+    print("Attempting to open browser windows...")
     webbrowser.open(auth_url)
     time.sleep(1)
     webbrowser.open(transaction_url)
-except:
-    pass
+except Exception as e:
+    print(f"Failed to open browser: {e}")
 
 # Keep the script running and handle Ctrl+C gracefully
 try:

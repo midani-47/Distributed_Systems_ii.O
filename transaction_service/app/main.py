@@ -6,10 +6,19 @@ from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from app.models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
-from app.database import get_db, create_tables, TransactionModel, ResultModel
-from app.auth import verify_token, require_role
-from app.logger import get_logger, RequestResponseFilter
+
+try:
+    # First try relative imports for running as module
+    from app.models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
+    from app.database import get_db, create_tables, TransactionModel, ResultModel
+    from app.auth import verify_token, require_role
+    from app.logger import get_logger, RequestResponseFilter
+except ImportError:
+    # Fall back to direct imports for running directly
+    from models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
+    from database import get_db, create_tables, TransactionModel, ResultModel
+    from auth import verify_token, require_role
+    from logger import get_logger, RequestResponseFilter
 
 # Create logs directory if it doesn't exist
 os.makedirs("logs", exist_ok=True)
@@ -34,13 +43,12 @@ app.add_middleware(
 # Configure logger
 logger = get_logger("transaction_service", "transaction_service.log")
 
-# Use lifespan event handlers
-@app.on_event("lifespan")
-async def lifespan(app: FastAPI):
+# Use startup/shutdown events instead of lifespan for compatibility
+@app.on_event("startup")
+async def startup_event():
     # Create database tables on startup
     create_tables()
     logger.info("Transaction Service started and database initialized")
-    yield
 
 # Middleware for request/response logging
 @app.middleware("http")

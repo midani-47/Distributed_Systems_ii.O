@@ -3,10 +3,18 @@ from datetime import timedelta, datetime
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from app.models import Token, UserCreate, UserResponse, User, LoginRequest
-from app.database import get_user, create_user, delete_user, initialize_users
-from app.auth import authenticate_user, create_access_token, verify_token, cleanup_expired_tokens
-from app.logger import get_logger, RequestResponseFilter
+try:
+    # First try relative imports for running as module
+    from app.models import Token, UserCreate, UserResponse, User, LoginRequest
+    from app.database import get_user, create_user, delete_user, initialize_users
+    from app.auth import authenticate_user, create_access_token, verify_token, cleanup_expired_tokens
+    from app.logger import get_logger, RequestResponseFilter
+except ImportError:
+    # Fall back to direct imports for running directly
+    from models import Token, UserCreate, UserResponse, User, LoginRequest
+    from database import get_user, create_user, delete_user, initialize_users
+    from auth import authenticate_user, create_access_token, verify_token, cleanup_expired_tokens
+    from logger import get_logger, RequestResponseFilter
 import logging
 import uuid
 import json
@@ -34,24 +42,38 @@ app.add_middleware(
 # Configure logger
 logger = get_logger("auth_service", "auth_service.log")
 
-# Use lifespan event handlers
-@app.on_event("lifespan")
-async def lifespan(app: FastAPI):
+# Task to clean up expired tokens
+cleanup_task = None
+
+# Use startup/shutdown events instead of lifespan for compatibility
+@app.on_event("startup")
+async def startup_event():
     # Initialize users on startup
     initialize_users()
     logger.info("Authentication Service started and users initialized")
     
     # Run token cleanup periodically
     import asyncio
-    async def cleanup_task():
+    global cleanup_task
+    
+    async def cleanup_loop():
         while True:
             cleanup_expired_tokens()
             await asyncio.sleep(60)  # Run every minute
     
     # Start background task
-    asyncio.create_task(cleanup_task())
-    
-    yield
+    cleanup_task = asyncio.create_task(cleanup_loop())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Cancel the cleanup task if it exists
+    global cleanup_task
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 # Middleware for request/response logging
 @app.middleware("http")
@@ -63,6 +85,9 @@ async def log_requests(request: Request, call_next):
     body = b""
     async for chunk in request.stream():
         body += chunk
+    
+    # Get port from environment or default
+    port = os.environ.get("AUTHENTICATION_PORT", 8080)
     
     # Log request
     log_data = {
