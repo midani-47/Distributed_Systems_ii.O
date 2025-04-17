@@ -19,7 +19,7 @@ pip uninstall -y fastapi pydantic uvicorn sqlalchemy
 echo "Installing dependencies compatible with Python 3.13..."
 pip install --upgrade pip
 pip install "fastapi<0.100.0" "uvicorn<0.22.0" "pydantic<2.0.0" sqlalchemy
-pip install passlib python-multipart python-jose requests
+pip install passlib python-multipart python-jose requests bcrypt
 
 # Create logs directory
 mkdir -p logs
