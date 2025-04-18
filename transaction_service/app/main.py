@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager
 
 try:
     # First try relative imports for running as module
@@ -23,12 +24,23 @@ except ImportError:
 # Create logs directory if it doesn't exist
 os.makedirs("logs", exist_ok=True)
 
+# Define lifespan context manager for FastAPI startup/shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Create database tables
+    create_tables()
+    logger.info("Transaction Service started and database initialized")
+    yield
+    # Shutdown: Any cleanup can go here if needed
+    logger.info("Transaction Service shutting down")
+
 # Create and configure the application
 app = FastAPI(
     title="Transaction Service",
     description="Service for managing financial transactions and fraud predictions",
     version="1.0.0",
-    docs_url="/docs"
+    docs_url="/docs",
+    lifespan=lifespan
 )
 
 # Setup CORS middleware
@@ -42,13 +54,6 @@ app.add_middleware(
 
 # Configure logger
 logger = get_logger("transaction_service", "transaction_service.log")
-
-# Use startup/shutdown events instead of lifespan for compatibility
-@app.on_event("startup")
-async def startup_event():
-    # Create database tables on startup
-    create_tables()
-    logger.info("Transaction Service started and database initialized")
 
 # Middleware for request/response logging
 @app.middleware("http")

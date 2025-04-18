@@ -4,8 +4,16 @@ import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
-# Configure formatter with detailed information
-formatter = logging.Formatter(
+# Configure formatter with detailed information and defaults for optional fields
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        # Ensure these attributes exist on the record
+        for attr in ['source', 'destination', 'headers', 'metadata']:
+            if not hasattr(record, attr):
+                setattr(record, attr, "unknown")
+        return super().format(record)
+
+formatter = SafeFormatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s - [%(source)s:%(destination)s]'
 )
 
