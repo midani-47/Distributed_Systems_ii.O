@@ -1,99 +1,90 @@
-# Windows PowerShell script to test services
-param (
-    [int]$auth_port = 8080,
-    [int]$transaction_port = 8081,
-    [string]$username = "admin",
-    [string]$password = "admin123"
-)
+#!/usr/bin/env pwsh
+# Windows PowerShell script to test fraud detection services
 
-Write-Host "==============================================="
-Write-Host "Testing Fraud Detection Services"
-Write-Host "==============================================="
+Write-Host "`n=== Testing Fraud Detection Services ===`n" -ForegroundColor Cyan
 
-# Helper function to check HTTP status code
-function Test-HttpStatusCode {
+# Function to test a service
+function Test-ServiceEndpoint {
     param (
-        [string]$url,
-        [string]$service_name
+        [string]$Name,
+        [string]$Url
     )
     
+    Write-Host "Testing $Name... " -NoNewline
+    
     try {
-        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-        Write-Host "✅ $service_name is running (Status: $($response.StatusCode))"
-        return $true
-    } catch {
-        $statusCode = $_.Exception.Response.StatusCode.value__
-        if ($statusCode) {
-            Write-Host "❌ $service_name returned error status: $statusCode"
+        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        if ($response.StatusCode -eq 200) {
+            Write-Host "OK (Status code: $($response.StatusCode))" -ForegroundColor Green
+            return $true
         } else {
-            Write-Host "❌ $service_name is not responding. Make sure it's running."
+            Write-Host "Failed (Status code: $($response.StatusCode))" -ForegroundColor Red
+            return $false
         }
+    } catch {
+        Write-Host "Failed to connect. Service may not be running." -ForegroundColor Red
+        Write-Host "Error: $_" -ForegroundColor Red
         return $false
     }
 }
 
 # Test Authentication Service
-$auth_service_url = "http://localhost:$auth_port/docs"
-$auth_running = Test-HttpStatusCode -url $auth_service_url -service_name "Authentication Service"
-
-if (-not $auth_running) {
-    Write-Host "Cannot proceed with tests because Authentication Service is not running."
-    exit 1
-}
+$authServiceRunning = Test-ServiceEndpoint -Name "Authentication Service" -Url "http://localhost:8080/docs"
 
 # Test Transaction Service
-$transaction_service_url = "http://localhost:$transaction_port/docs"
-$transaction_running = Test-HttpStatusCode -url $transaction_service_url -service_name "Transaction Service"
+$transServiceRunning = Test-ServiceEndpoint -Name "Transaction Service" -Url "http://localhost:8081/docs"
 
-if (-not $transaction_running) {
-    Write-Host "Cannot proceed with tests because Transaction Service is not running."
-    exit 1
+# If both services are running, test authentication flow
+if ($authServiceRunning -and $transServiceRunning) {
+    Write-Host "`n=== Testing Authentication Flow ===`n" -ForegroundColor Cyan
+    
+    # Test authentication
+    Write-Host "Getting authentication token... " -NoNewline
+    try {
+        $authData = @{
+            username = "johndoe"
+            password = "password123"
+        } | ConvertTo-Json
+        
+        $response = Invoke-RestMethod -Uri "http://localhost:8080/token" `
+            -Method Post `
+            -Body $authData `
+            -ContentType "application/json" `
+            -ErrorAction Stop
+        
+        if ($response.access_token) {
+            $token = $response.access_token
+            Write-Host "Success! Token received." -ForegroundColor Green
+            
+            # Test accessing transactions API with token
+            Write-Host "`nTesting Transaction API access... " -NoNewline
+            try {
+                $headers = @{
+                    "Authorization" = "Bearer $token"
+                }
+                
+                $transResponse = Invoke-RestMethod -Uri "http://localhost:8081/transactions" `
+                    -Method Get `
+                    -Headers $headers `
+                    -ErrorAction Stop
+                
+                Write-Host "Success! Transaction API accessible." -ForegroundColor Green
+                Write-Host "`nFound $(($transResponse | Measure-Object).Count) transactions in the response."
+                
+                Write-Host "`n✅ All tests passed successfully!" -ForegroundColor Green
+            } catch {
+                Write-Host "Failed to access Transaction API." -ForegroundColor Red
+                Write-Host "Error: $_" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "Failed to get authentication token." -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "Failed to authenticate." -ForegroundColor Red
+        Write-Host "Error: $_" -ForegroundColor Red
+    }
+} else {
+    Write-Host "`n❌ Cannot proceed with authentication tests because one or more services are not running." -ForegroundColor Red
 }
 
-# Test Authentication
-Write-Host "`nTesting authentication..."
-try {
-    $auth_data = @{
-        "username" = $username
-        "password" = $password
-    }
-    
-    $response = Invoke-RestMethod -Uri "http://localhost:$auth_port/token" -Method Post -Form $auth_data -UseBasicParsing
-    
-    Write-Host "DEBUG - Auth response: $($response | ConvertTo-Json -Compress)"
-    
-    if ($response.access_token) {
-        Write-Host "✅ Authentication successful! Token received."
-        $token = $response.access_token
-    } else {
-        Write-Host "❌ Authentication failed. No token received."
-        exit 1
-    }
-} catch {
-    $statusCode = $_.Exception.Response.StatusCode.value__
-    Write-Host "❌ Authentication failed with status: $statusCode"
-    Write-Host $_.Exception.Message
-    exit 1
-}
-
-# Test Transaction API access with token
-Write-Host "`nTesting Transaction API access..."
-try {
-    $headers = @{
-        "Authorization" = "Bearer $token"
-    }
-    
-    $response = Invoke-RestMethod -Uri "http://localhost:$transaction_port/transactions" -Method Get -Headers $headers -UseBasicParsing
-    
-    Write-Host "DEBUG - Transactions response: $($response | ConvertTo-Json -Compress)"
-    
-    Write-Host "✅ Successfully accessed Transaction API!"
-    Write-Host "Retrieved $(($response | Measure-Object).Count) transaction(s)"
-} catch {
-    $statusCode = $_.Exception.Response.StatusCode.value__
-    Write-Host "❌ Transaction API access failed with status: $statusCode"
-    Write-Host $_.Exception.Message
-    exit 1
-}
-
-Write-Host "`n✅ All tests passed! Services are running properly." 
+Write-Host "`n=== Test Complete ===`n" -ForegroundColor Cyan 

@@ -1,85 +1,138 @@
-# Windows PowerShell script to stop services
+#!/usr/bin/env pwsh
+# Windows PowerShell script to stop fraud detection services
 
-Write-Host "Stopping services..."
+# Set script to stop on first error
+$ErrorActionPreference = "Stop"
 
-# Kill services using saved PIDs (though these may not be accurate in Windows)
-if (Test-Path -Path ".\auth_service.pid") {
-    $auth_pid = Get-Content -Path ".\auth_service.pid"
-    try {
-        Stop-Process -Id $auth_pid -ErrorAction SilentlyContinue
-    } catch {
-        # Process may not exist anymore
-    }
-    Remove-Item -Path ".\auth_service.pid" -Force
-    Write-Host "Authentication Service stopped"
-}
+Write-Host "`n=== Stopping Fraud Detection Services ===`n" -ForegroundColor Cyan
 
-if (Test-Path -Path ".\transaction_service.pid") {
-    $transaction_pid = Get-Content -Path ".\transaction_service.pid"
-    try {
-        Stop-Process -Id $transaction_pid -ErrorAction SilentlyContinue
-    } catch {
-        # Process may not exist anymore
-    }
-    Remove-Item -Path ".\transaction_service.pid" -Force
-    Write-Host "Transaction Service stopped"
-}
-
-# Find and kill any remaining Python processes related to our services
-$pythonProcesses = Get-Process -Name python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*app.main*" -or $_.CommandLine -like "*uvicorn*" } 
-
-if ($pythonProcesses) {
-    foreach ($process in $pythonProcesses) {
+# Function to stop a service using its PID file
+function Stop-ServiceWithPidFile {
+    param (
+        [string]$ServiceName,
+        [string]$PidFile
+    )
+    
+    if (Test-Path $PidFile) {
         try {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            Write-Host "Stopped Python process with ID: $($process.Id)"
+            $jobId = Get-Content $PidFile
+            Write-Host "Stopping $ServiceName (Job ID: $jobId)..." -NoNewline
+            
+            # Try to stop the job
+            if ($jobId -match '^\d+$') {
+                if (Get-Job -Id $jobId -ErrorAction SilentlyContinue) {
+                    Stop-Job -Id $jobId -ErrorAction SilentlyContinue
+                    Remove-Job -Id $jobId -Force -ErrorAction SilentlyContinue
+                    Write-Host " Done" -ForegroundColor Green
+                } else {
+                    Write-Host " Job not found" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host " Invalid job ID in PID file" -ForegroundColor Yellow
+            }
+            
+            # Remove the PID file
+            Remove-Item $PidFile -Force
         } catch {
-            # Process may not exist anymore
+            Write-Host " Failed: $_" -ForegroundColor Red
         }
+    } else {
+        Write-Host "$ServiceName is not running (no PID file found)" -ForegroundColor Yellow
     }
 }
 
-# Additional check for Python processes using our ports
-$portUsage = netstat -ano | Select-String "LISTENING" | Select-String ":(8080|8081) "
-if ($portUsage) {
-    $portUsage | ForEach-Object {
-        $processId = ($_ -split '\s+')[-1] -as [int]
-        if ($processId) {
+# Kill any Python processes running our services
+function Stop-PythonProcesses {
+    # Get all Python processes
+    $pythonProcesses = Get-Process -Name python -ErrorAction SilentlyContinue
+    
+    if ($pythonProcesses) {
+        Write-Host "Checking for Python processes running our services..." -ForegroundColor Yellow
+        
+        foreach ($process in $pythonProcesses) {
+            # Get command line for the process to identify our services
             try {
-                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                Write-Host "Stopped process with ID: $processId that was using our ports"
+                $cmdline = (Get-WmiObject Win32_Process -Filter "ProcessId = $($process.Id)").CommandLine
+                
+                # Check if this is one of our services
+                if ($cmdline -match "app\.main" -and ($cmdline -match "auth_service" -or $cmdline -match "transaction_service")) {
+                    Write-Host "Stopping Python process with ID $($process.Id)..." -NoNewline
+                    try {
+                        Stop-Process -Id $process.Id -Force
+                        Write-Host " Done" -ForegroundColor Green
+                    } catch {
+                        Write-Host " Failed: $_" -ForegroundColor Red
+                    }
+                }
             } catch {
-                # Process may not exist anymore 
+                # Skip if we can't get command line
+                continue
             }
         }
     }
 }
 
-# Wait a moment to ensure processes have time to stop
-Start-Sleep -Seconds 2
+# Stop services using saved PIDs
+Write-Host "Stopping services using PID files..." -ForegroundColor Yellow
+Stop-ServiceWithPidFile -ServiceName "Authentication Service" -PidFile "auth.pid"
+Stop-ServiceWithPidFile -ServiceName "Transaction Service" -PidFile "transaction.pid"
 
-# Check if any processes are still using our ports
-$remainingPortUsage = netstat -ano | Select-String "LISTENING" | Select-String ":(8080|8081) "
-if ($remainingPortUsage) {
-    Write-Host "Warning: Some processes are still using our ports:"
-    $remainingPortUsage | ForEach-Object {
-        Write-Host $_
+# Kill any remaining Python processes related to our services
+Stop-PythonProcesses
+
+# Check if any services are still running
+$authRunning = Test-Path "auth.pid"
+$transRunning = Test-Path "transaction.pid"
+
+$pythonProcesses = Get-Process -Name python -ErrorAction SilentlyContinue | Where-Object {
+    try {
+        $cmdline = (Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+        $cmdline -match "app\.main" -and ($cmdline -match "auth_service" -or $cmdline -match "transaction_service")
+    } catch {
+        $false
+    }
+}
+
+if ($authRunning -or $transRunning -or $pythonProcesses) {
+    Write-Host "`nWarning: Some services may still be running." -ForegroundColor Yellow
+    
+    if ($pythonProcesses) {
+        Write-Host "Force killing all remaining service processes..." -ForegroundColor Yellow
+        foreach ($process in $pythonProcesses) {
+            try {
+                Stop-Process -Id $process.Id -Force
+                Write-Host "Killed process with ID $($process.Id)" -ForegroundColor Green
+            } catch {
+                Write-Host "Failed to kill process with ID $($process.Id): $_" -ForegroundColor Red
+            }
+        }
     }
     
-    $confirmKill = Read-Host "Do you want to forcefully kill these processes? (y/n)"
-    if ($confirmKill.ToLower() -eq 'y') {
-        $remainingPortUsage | ForEach-Object {
-            $processId = ($_ -split '\s+')[-1] -as [int]
-            if ($processId) {
-                try {
-                    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                    Write-Host "Forcefully stopped process with ID: $processId"
-                } catch {
-                    # Process may not exist anymore
-                }
-            }
-        }
+    # Remove any remaining PID files
+    if (Test-Path "auth.pid") { Remove-Item "auth.pid" -Force }
+    if (Test-Path "transaction.pid") { Remove-Item "transaction.pid" -Force }
+}
+
+# Verify all services are stopped
+$remainingProcesses = Get-Process -Name python -ErrorAction SilentlyContinue | Where-Object {
+    try {
+        $cmdline = (Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+        $cmdline -match "app\.main" -and ($cmdline -match "auth_service" -or $cmdline -match "transaction_service")
+    } catch {
+        $false
     }
 }
 
-Write-Host "All services stopped!" 
+if ($remainingProcesses) {
+    Write-Host "`n❌ Warning: Some service processes could not be stopped." -ForegroundColor Red
+    Write-Host "   The following processes might need to be stopped manually:" -ForegroundColor Yellow
+    foreach ($process in $remainingProcesses) {
+        Write-Host "   - Process ID: $($process.Id)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "`n✅ All services stopped!" -ForegroundColor Green
+}
+
+Write-Host "" 
+Write-Host "`n✅ All services stopped!" -ForegroundColor Green 
+} 

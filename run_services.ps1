@@ -1,121 +1,178 @@
-# Windows PowerShell script to run services
-param (
-    [int]$auth_port = 8080,
-    [int]$transaction_port = 8081
-)
+#!/usr/bin/env pwsh
+# Windows PowerShell script to run fraud detection services
 
-Write-Host "==============================================="
-Write-Host "Starting Fraud Detection Services (Windows)"
-Write-Host "==============================================="
+# Set script to stop on first error
+$ErrorActionPreference = "Stop"
 
-# Stop any existing services
-if (Test-Path -Path ".\stop_services.ps1") {
-    Write-Host "Stopping any existing services..."
-    & .\stop_services.ps1
+Write-Host "`n=== Starting Fraud Detection Services ===`n" -ForegroundColor Cyan
+
+# Define ports
+$AUTH_PORT = 8080
+$TRANSACTION_PORT = 8081
+
+# Create logs directory
+$logsDir = Join-Path $PSScriptRoot "logs"
+if (-not (Test-Path $logsDir)) {
+    New-Item -Path $logsDir -ItemType Directory | Out-Null
+    Write-Host "Created logs directory at $logsDir" -ForegroundColor Green
 }
 
-# Create logs directory and clean old logs
-if (-not (Test-Path -Path ".\logs")) {
-    New-Item -Path ".\logs" -ItemType Directory | Out-Null
+# First stop any running services to avoid conflicts
+if (Test-Path "stop_services.ps1") {
+    Write-Host "Stopping any running services..." -ForegroundColor Yellow
+    & "$PSScriptRoot\stop_services.ps1"
 }
-Remove-Item -Path ".\logs\*.log" -ErrorAction SilentlyContinue
 
 # Function to check if a port is in use
 function Test-PortInUse {
-    param([int]$port)
+    param (
+        [int]$Port
+    )
     
-    $netstat = netstat -ano | Select-String "LISTENING" | Select-String ":$port "
-    return ($netstat -ne $null)
+    $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    return ($connections.Count -gt 0)
 }
 
-# Check if ports are in use and handle conflicts
-if (Test-PortInUse -port $auth_port) {
-    Write-Host "Warning: Port $auth_port is already in use!"
-    # Try to find the process using the port
-    $processId = (netstat -ano | Select-String "LISTENING" | Select-String ":$auth_port " | ForEach-Object { ($_ -split '\s+')[-1] }) -as [int]
-    if ($processId) {
-        Write-Host "Process ID using port $auth_port: $processId"
-        $confirmKill = Read-Host "Do you want to kill this process? (y/n)"
-        if ($confirmKill.ToLower() -eq 'y') {
-            Stop-Process -Id $processId -Force
-            Write-Host "Process killed."
-        } else {
-            Write-Host "Please choose another port."
+# Function to kill process using a specific port
+function Stop-ProcessUsingPort {
+    param (
+        [int]$Port,
+        [string]$ServiceName
+    )
+    
+    $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    
+    if ($connections) {
+        foreach ($conn in $connections) {
+            $process = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+            if ($process) {
+                Write-Host "Found process using port $Port: $($process.Name) (PID: $($process.Id))" -ForegroundColor Yellow
+                Write-Host "Stopping process..." -NoNewline
+                
+                try {
+                    Stop-Process -Id $process.Id -Force
+                    Write-Host " Done" -ForegroundColor Green
+                } catch {
+                    Write-Host " Failed: $_" -ForegroundColor Red
+                }
+            }
+        }
+        
+        # Verify port is now free
+        Start-Sleep -Seconds 2
+        if (Test-PortInUse -Port $Port) {
+            Write-Host "Warning: Port $Port is still in use after attempting to free it." -ForegroundColor Red
+            Write-Host "Please manually close the application using this port and try again." -ForegroundColor Red
             exit 1
         }
     }
 }
 
-if (Test-PortInUse -port $transaction_port) {
-    Write-Host "Warning: Port $transaction_port is already in use!"
-    # Try to find the process using the port
-    $processId = (netstat -ano | Select-String "LISTENING" | Select-String ":$transaction_port " | ForEach-Object { ($_ -split '\s+')[-1] }) -as [int]
-    if ($processId) {
-        Write-Host "Process ID using port $transaction_port: $processId"
-        $confirmKill = Read-Host "Do you want to kill this process? (y/n)"
-        if ($confirmKill.ToLower() -eq 'y') {
-            Stop-Process -Id $processId -Force
-            Write-Host "Process killed."
-        } else {
-            Write-Host "Please choose another port."
-            exit 1
-        }
-    }
+# Check for port conflicts and resolve them
+if (Test-PortInUse -Port $AUTH_PORT) {
+    Write-Host "Port $AUTH_PORT is already in use." -ForegroundColor Yellow
+    Stop-ProcessUsingPort -Port $AUTH_PORT -ServiceName "Authentication Service"
+}
+
+if (Test-PortInUse -Port $TRANSACTION_PORT) {
+    Write-Host "Port $TRANSACTION_PORT is already in use." -ForegroundColor Yellow
+    Stop-ProcessUsingPort -Port $TRANSACTION_PORT -ServiceName "Transaction Service"
 }
 
 # Activate virtual environment
-Write-Host "Activating virtual environment..."
-if (Test-Path -Path ".\venv\Scripts\activate.ps1") {
-    & .\venv\Scripts\activate.ps1
-} elseif (Test-Path -Path ".\.venv\Scripts\activate.ps1") {
-    & .\.venv\Scripts\activate.ps1
+$venvPath = Join-Path $PSScriptRoot "venv"
+$activateScript = Join-Path $venvPath "Scripts\Activate.ps1"
+
+if (Test-Path $activateScript) {
+    Write-Host "Activating virtual environment..." -NoNewline
+    & $activateScript
+    Write-Host " Done" -ForegroundColor Green
 } else {
-    Write-Host "Error: Virtual environment not found. Please create it first."
-    exit 1
+    Write-Host "Virtual environment not found at $venvPath. Proceeding without activation." -ForegroundColor Yellow
 }
 
-# Start Auth Service
-Write-Host "Starting Authentication Service on port $auth_port..."
-$env:AUTHENTICATION_PORT = $auth_port
-Start-Process -FilePath "python" -ArgumentList "-m uvicorn app.main:app --host 0.0.0.0 --port $auth_port" -WorkingDirectory ".\auth_service" -RedirectStandardOutput ".\logs\auth_service.log" -RedirectStandardError ".\logs\auth_service_error.log" -NoNewWindow
-$auth_pid = $pid  # This isn't actually the correct PID, but we'll need a different approach for Windows
-$auth_pid | Out-File -FilePath ".\auth_service.pid"
-Write-Host "Authentication Service started with PID: $auth_pid"
+# Clear previous log files
+Get-ChildItem -Path $logsDir -Filter "*.log" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item
+Write-Host "Cleaned old log files" -ForegroundColor Green
 
-# Wait a moment to ensure the service starts
-Start-Sleep -Seconds 5
+# Set environment variables for both services
+$env:AUTH_SERVICE_PORT = $AUTH_PORT
+$env:TRANSACTION_SERVICE_PORT = $TRANSACTION_PORT
+$env:PYTHONPATH = $PSScriptRoot
+
+# Function to start a service
+function Start-Service {
+    param (
+        [string]$Name,
+        [string]$Command,
+        [string]$WorkingDir,
+        [string]$PidFile
+    )
+    
+    Write-Host "Starting $Name..." -ForegroundColor Cyan
+    
+    Set-Location $WorkingDir
+    
+    # Start the process in the background
+    $job = Start-Job -ScriptBlock {
+        param($command, $workDir)
+        Set-Location $workDir
+        Invoke-Expression $command
+    } -ArgumentList $Command, $WorkingDir
+    
+    # Save the job ID to the PID file
+    $job.Id | Out-File -FilePath $PidFile
+    
+    # Wait a bit for the service to start
+    Start-Sleep -Seconds 3
+    
+    # Check if the job is still running
+    if (Get-Job -Id $job.Id -ErrorAction SilentlyContinue) {
+        Write-Host "$Name started successfully (Job ID: $($job.Id))" -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "$Name failed to start" -ForegroundColor Red
+        return $false
+    }
+}
+
+# Start Authentication Service
+$authServiceDir = Join-Path $PSScriptRoot "auth_service"
+$authCommand = "python -m app.main"
+$authLogFile = Join-Path $logsDir "auth_service.log"
+$authSucceeded = Start-Service -Name "Authentication Service" -Command $authCommand -WorkingDir $authServiceDir -PidFile "auth.pid"
 
 # Start Transaction Service
-Write-Host "Starting Transaction Service on port $transaction_port..."
-$env:TRANSACTION_PORT = $transaction_port
-Start-Process -FilePath "python" -ArgumentList "-m uvicorn app.main:app --host 0.0.0.0 --port $transaction_port" -WorkingDirectory ".\transaction_service" -RedirectStandardOutput ".\logs\transaction_service.log" -RedirectStandardError ".\logs\transaction_service_error.log" -NoNewWindow
-$transaction_pid = $pid  # This isn't actually the correct PID, but we'll need a different approach for Windows
-$transaction_pid | Out-File -FilePath ".\transaction_service.pid"
-Write-Host "Transaction Service started with PID: $transaction_pid"
+$transServiceDir = Join-Path $PSScriptRoot "transaction_service"
+$transCommand = "python -m app.main"
+$transLogFile = Join-Path $logsDir "transaction_service.log"
+$transSucceeded = Start-Service -Name "Transaction Service" -Command $transCommand -WorkingDir $transServiceDir -PidFile "transaction.pid"
 
-# Wait for services to start
-Write-Host "Waiting for services to start..."
-Start-Sleep -Seconds 10
+# Display info about running services
+Write-Host "`n=== Service Status ===`n" -ForegroundColor Cyan
 
-# Print URLs
-Write-Host "==========================================================="
-Write-Host "Services are now running:"
-Write-Host "- Auth Service: http://localhost:$auth_port/docs"
-Write-Host "- Transaction Service: http://localhost:$transaction_port/docs"
-Write-Host ""
-Write-Host "To stop the services, run: .\stop_services.ps1"
-Write-Host "==========================================================="
+if ($authSucceeded) {
+    Write-Host "✅ Authentication Service: Running on http://localhost:$AUTH_PORT" -ForegroundColor Green
+    Write-Host "   - API Documentation: http://localhost:$AUTH_PORT/docs" -ForegroundColor Gray
+    Write-Host "   - Log file: $authLogFile" -ForegroundColor Gray
+} else {
+    Write-Host "❌ Authentication Service: Failed to start" -ForegroundColor Red
+}
 
-# Wait for Ctrl+C or manual termination
-Write-Host "Press Ctrl+C to stop services..."
-try {
-    while ($true) {
-        Start-Sleep -Seconds 1
-    }
-} finally {
-    # Cleanup when the script is terminated
-    Write-Host "Stopping services..."
-    if (Test-Path -Path ".\stop_services.ps1") {
-        & .\stop_services.ps1
-    }
-} 
+if ($transSucceeded) {
+    Write-Host "✅ Transaction Service: Running on http://localhost:$TRANSACTION_PORT" -ForegroundColor Green
+    Write-Host "   - API Documentation: http://localhost:$TRANSACTION_PORT/docs" -ForegroundColor Gray
+    Write-Host "   - Log file: $transLogFile" -ForegroundColor Gray
+} else {
+    Write-Host "❌ Transaction Service: Failed to start" -ForegroundColor Red
+}
+
+if ($authSucceeded -and $transSucceeded) {
+    Write-Host "`n✅ All services started successfully!" -ForegroundColor Green
+    Write-Host "   - To test the services: .\test_services.ps1" -ForegroundColor Cyan
+    Write-Host "   - To stop the services: .\stop_services.ps1" -ForegroundColor Cyan
+} else {
+    Write-Host "`n❌ Some services failed to start. Check the logs for details." -ForegroundColor Red
+}
+
+Write-Host "" 
