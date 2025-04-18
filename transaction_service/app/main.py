@@ -116,8 +116,18 @@ async def create_transaction(
         db.commit()
         db.refresh(db_transaction)
         
+        # Convert SQLAlchemy model to dict for proper serialization
+        transaction_dict = {
+            "id": db_transaction.id,
+            "customer": db_transaction.customer,
+            "timestamp": db_transaction.timestamp,
+            "status": db_transaction.status,
+            "vendor_id": db_transaction.vendor_id,
+            "amount": db_transaction.amount
+        }
+        
         logger.info(f"Transaction created: ID={db_transaction.id}, Customer={transaction.customer}")
-        return db_transaction
+        return transaction_dict
     except Exception as e:
         # Log detailed error for debugging
         logger.error(f"Error creating transaction: {str(e)}")
@@ -141,7 +151,20 @@ async def read_transactions_simple(
     if status:
         query = query.filter(TransactionModel.status == status)
     
-    transactions = query.offset(skip).limit(limit).all()
+    db_transactions = query.offset(skip).limit(limit).all()
+    
+    # Convert SQLAlchemy models to dicts for proper serialization
+    transactions = []
+    for db_transaction in db_transactions:
+        transactions.append({
+            "id": db_transaction.id,
+            "customer": db_transaction.customer,
+            "timestamp": db_transaction.timestamp,
+            "status": db_transaction.status,
+            "vendor_id": db_transaction.vendor_id,
+            "amount": db_transaction.amount
+        })
+    
     logger.info(f"Retrieved {len(transactions)} transactions")
     return transactions
 
@@ -159,7 +182,20 @@ async def read_transactions(
     if status:
         query = query.filter(TransactionModel.status == status)
     
-    transactions = query.offset(skip).limit(limit).all()
+    db_transactions = query.offset(skip).limit(limit).all()
+    
+    # Convert SQLAlchemy models to dicts for proper serialization
+    transactions = []
+    for db_transaction in db_transactions:
+        transactions.append({
+            "id": db_transaction.id,
+            "customer": db_transaction.customer,
+            "timestamp": db_transaction.timestamp,
+            "status": db_transaction.status,
+            "vendor_id": db_transaction.vendor_id,
+            "amount": db_transaction.amount
+        })
+    
     logger.info(f"Retrieved {len(transactions)} transactions")
     return transactions
 
@@ -215,8 +251,18 @@ async def update_transaction(
     db.commit()
     db.refresh(transaction)
     
+    # Convert SQLAlchemy model to dict for proper serialization
+    transaction_dict = {
+        "id": transaction.id,
+        "customer": transaction.customer,
+        "timestamp": transaction.timestamp,
+        "status": transaction.status,
+        "vendor_id": transaction.vendor_id,
+        "amount": transaction.amount
+    }
+    
     logger.info(f"Updated transaction status: ID={transaction_id}, Status={status}")
-    return transaction
+    return transaction_dict
 
 # Prediction endpoints (ML results)
 @app.post("/api/transactions/{transaction_id}/results", response_model=Prediction, status_code=status.HTTP_201_CREATED)
