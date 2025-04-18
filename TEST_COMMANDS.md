@@ -36,7 +36,10 @@ curl -Method POST `
 Expected response:
 ```json
 {
-  "token": "base64_random_string|admin"
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"access_token":"Vb/d9V2YczXhrrrFznUEwQ==|admin","token_type":"bearer"}
+...
 }
 ```
 
