@@ -254,4 +254,4 @@ if __name__ == "__main__":
     # Get port from environment variable or use default 8080
     port = int(os.environ.get("AUTHENTICATION_PORT", 8080))
     print(f"Starting Authentication Service on port {port} with debug mode...")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True, debug=True) 
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True) 
