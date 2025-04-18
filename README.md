@@ -35,24 +35,24 @@ pip install -r requirements.txt
 
 ## Running the Services
 
-For the simplest and most reliable way to run the services:
+To run both services, use the provided start script:
 
 ```bash
-# Run both services using the Python script
-python run_services.py
-```
+# Make the script executable if needed
+chmod +x start.sh
 
-This Python script:
-- Stops any existing services
-- Frees up required ports if needed
-- Starts both Authentication and Transaction services
-- Shows real-time status and provides error information
-- Automatically opens service documentation in your browser
-- Press Ctrl+C to stop all services when done
+# Run the services
+./start.sh
+```
 
 The services will be available at:
 - Authentication Service: http://localhost:8080/docs
 - Transaction Service: http://localhost:8081/docs
+
+To stop the services, press Ctrl+C in the terminal window or run:
+```bash
+./stop_services.sh
+```
 
 ## API Usage Examples
 
@@ -98,14 +98,18 @@ curl -X 'GET' 'http://localhost:8081/transactions' \
 If you encounter issues:
 
 1. Check the log files in the `logs` directory
-2. Ensure ports 8080 and 8081 are available
-3. Make sure Python dependencies are installed correctly
+   - Authentication Service: `logs/auth_service.log`
+   - Transaction Service: `logs/transaction_service.log`
+   
+2. Ensure ports 8080 and 8081 are available:
+   - On macOS/Linux: `lsof -i:8080` and `lsof -i:8081`
+   - On Windows: `netstat -ano | findstr :8080` and `netstat -ano | findstr :8081`
 
-## Error Logs
-
-Logs are stored in the `logs` directory:
-- Authentication Service: `logs/auth_service.log`
-- Transaction Service: `logs/transaction_service.log`
+3. Make sure Python dependencies are installed correctly:
+   ```bash
+   pip list | grep fastapi
+   pip list | grep uvicorn
+   ```
 
 ## Important Notes
 

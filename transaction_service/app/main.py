@@ -61,6 +61,9 @@ async def log_requests(request: Request, call_next):
     async for chunk in request.stream():
         body += chunk
     
+    # Get port from environment or default
+    port = os.environ.get("TRANSACTION_PORT", 8081)
+    
     # Log request
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
