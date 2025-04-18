@@ -85,7 +85,7 @@ curl -X 'GET' 'http://localhost:8081/transactions' \
 
 - **Admin User**:
   - Username: admin
-  - Password: admin
+  - Password: admin123
   - Role: admin
 
 - **Agent User**:

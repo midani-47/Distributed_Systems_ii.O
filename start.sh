@@ -55,12 +55,12 @@ if [ -z "$VENV_ACTIVATE" ]; then
     exit 1
 fi
 
-# Start auth service
+# Start services with logs visible in terminal
 echo "Starting Authentication Service on port $AUTH_PORT..."
 cd auth_service
 source ../$VENV_ACTIVATE
 export AUTHENTICATION_PORT=$AUTH_PORT
-python -m uvicorn app.main:app --host 0.0.0.0 --port $AUTH_PORT > ../logs/auth_service.log 2>&1 &
+python -m uvicorn app.main:app --host 0.0.0.0 --port $AUTH_PORT --log-level info > ../logs/auth_service.log 2>&1 &
 AUTH_PID=$!
 echo $AUTH_PID > ../auth_service.pid
 cd ..
@@ -68,12 +68,11 @@ cd ..
 # Wait a moment to ensure the service starts
 sleep 5
 
-# Start transaction service
 echo "Starting Transaction Service on port $TRANS_PORT..."
 cd transaction_service
 source ../$VENV_ACTIVATE
 export TRANSACTION_PORT=$TRANS_PORT
-python -m uvicorn app.main:app --host 0.0.0.0 --port $TRANS_PORT > ../logs/transaction_service.log 2>&1 &
+python -m uvicorn app.main:app --host 0.0.0.0 --port $TRANS_PORT --log-level info > ../logs/transaction_service.log 2>&1 &
 TRANS_PID=$!
 echo $TRANS_PID > ../transaction_service.pid
 cd ..
@@ -93,9 +92,15 @@ To stop the services, run: ./stop_services.sh
 ===========================================================
 EOF
 
+echo "Services logs will be displayed below. Press Ctrl+C to stop services."
+echo "==============================================="
+
+# Function to display logs in real-time
+show_logs() {
+    echo "Displaying service logs (press Ctrl+C to stop)..."
+    tail -f logs/auth_service.log logs/transaction_service.log
+}
+
 # Wait for Ctrl+C
 trap "echo 'Stopping services...'; ./stop_services.sh" INT
-echo "Press Ctrl+C to stop services..."
-while true; do
-    sleep 1
-done 
+show_logs 

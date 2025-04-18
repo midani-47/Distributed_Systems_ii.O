@@ -84,7 +84,7 @@ async def log_requests(request: Request, call_next):
     # Log request path and method without reading the body
     port = os.environ.get("AUTHENTICATION_PORT", 8080)
     
-    # Log basic request info without body to avoid streaming issues
+    # Prepare request logging data
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
         "request_id": request_id,
@@ -93,9 +93,17 @@ async def log_requests(request: Request, call_next):
         "method": request.method,
         "path": request.url.path,
         "query_params": dict(request.query_params),
+        "headers": dict(request.headers),
     }
     
-    logger.info(f"Request started: {json.dumps(log_data)}")
+    # Print detailed request log to terminal
+    print(f"\n[AUTH-REQUEST] {datetime.utcnow().isoformat()} | {request.method} {request.url.path}")
+    print(f"  Source: {client_host}")
+    print(f"  Headers: {json.dumps(dict(request.headers), indent=2)}")
+    print(f"  Query params: {json.dumps(dict(request.query_params), indent=2)}")
+    
+    # Also log to file
+    logger.info(f"Request: {json.dumps(log_data)}")
     
     # Process the request without trying to read/reconstruct the body
     response = await call_next(request)
@@ -105,8 +113,14 @@ async def log_requests(request: Request, call_next):
         "timestamp": datetime.utcnow().isoformat(),
         "request_id": request_id,
         "statusCode": response.status_code,
+        "headers": dict(response.headers),
     }
     
+    # Print response log to terminal
+    print(f"[AUTH-RESPONSE] {datetime.utcnow().isoformat()} | Status: {response.status_code}")
+    print(f"  Headers: {json.dumps(dict(response.headers), indent=2)}")
+    
+    # Also log to file
     logger.info(f"Response: {json.dumps(response_log)}")
     
     return response
@@ -239,4 +253,5 @@ if __name__ == "__main__":
     import uvicorn
     # Get port from environment variable or use default 8080
     port = int(os.environ.get("AUTHENTICATION_PORT", 8080))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True) 
+    print(f"Starting Authentication Service on port {port} with debug mode...")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True, debug=True) 
