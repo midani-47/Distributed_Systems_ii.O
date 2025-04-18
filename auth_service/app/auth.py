@@ -20,8 +20,10 @@ def authenticate_user(username: str, password: str) -> Optional[UserInDB]:
     """Verify username and password and return user if valid"""
     user = get_user(username)
     if not user:
+        logger.warning(f"User not found: {username}")
         return None
     if not verify_password(password, user.hashed_password):
+        logger.warning(f"Invalid password for user: {username}")
         return None
     return user
 
@@ -42,11 +44,16 @@ def create_access_token(username: str, role: str) -> str:
         "expiry": expiry
     }
     
-    logger.info(f"Created token for user: {username}")
+    logger.info(f"Created token for user: {username}, token value: {token[:10]}...")
+    logger.info(f"Total tokens in DB: {len(tokens_db)}")
     return token
 
 def verify_token(token: str) -> Optional[dict]:
     """Verify token exists and not expired, return user data if valid"""
+    logger.info(f"Verifying token: {token[:10]}...")
+    logger.info(f"Total tokens in DB: {len(tokens_db)}")
+    logger.info(f"Known tokens: {[t[:10] for t in tokens_db.keys()]}")
+    
     if token not in tokens_db:
         logger.warning("Token not found in database")
         return None

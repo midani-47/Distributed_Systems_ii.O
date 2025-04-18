@@ -3,7 +3,7 @@ param (
     [int]$auth_port = 8080,
     [int]$transaction_port = 8081,
     [string]$username = "admin",
-    [string]$password = "admin"
+    [string]$password = "admin123"
 )
 
 Write-Host "==============================================="
@@ -60,6 +60,8 @@ try {
     
     $response = Invoke-RestMethod -Uri "http://localhost:$auth_port/token" -Method Post -Form $auth_data -UseBasicParsing
     
+    Write-Host "DEBUG - Auth response: $($response | ConvertTo-Json -Compress)"
+    
     if ($response.access_token) {
         Write-Host "✅ Authentication successful! Token received."
         $token = $response.access_token
@@ -82,6 +84,8 @@ try {
     }
     
     $response = Invoke-RestMethod -Uri "http://localhost:$transaction_port/transactions" -Method Get -Headers $headers -UseBasicParsing
+    
+    Write-Host "DEBUG - Transactions response: $($response | ConvertTo-Json -Compress)"
     
     Write-Host "✅ Successfully accessed Transaction API!"
     Write-Host "Retrieved $(($response | Measure-Object).Count) transaction(s)"

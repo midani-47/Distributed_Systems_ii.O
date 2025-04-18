@@ -30,7 +30,13 @@ class LoginRequest(BaseModel):
 
 
 class Token(BaseModel):
-    token: str
+    access_token: str
+    token_type: str = "bearer"
+    
+    @property
+    def token(self) -> str:
+        """Legacy compatibility property"""
+        return self.access_token
 
 
 class TokenData(BaseModel):

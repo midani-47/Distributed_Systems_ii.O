@@ -61,50 +61,30 @@ async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     client_host = request.client.host if request.client else "unknown"
     
-    # Read request body
-    body = b""
-    async for chunk in request.stream():
-        body += chunk
-    
-    # Get port from environment or default
+    # Log request path and method without reading the body
     port = os.environ.get("TRANSACTION_PORT", 8081)
     
-    # Log request
+    # Log basic request info without body to avoid streaming issues
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
+        "request_id": request_id,
         "source": client_host,
         "destination": f"transaction_service:{port}{request.url.path}",
-        "headers": dict(request.headers),
-        "metadata": {
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": dict(request.query_params),
-        }
+        "method": request.method,
+        "path": request.url.path,
+        "query_params": dict(request.query_params),
     }
     
-    # Log body if it exists and is JSON
-    if body:
-        try:
-            log_data["body"] = json.loads(body)
-        except:
-            log_data["body"] = body.decode('utf-8', errors='replace')
+    logger.info(f"Request started: {json.dumps(log_data)}")
     
-    logger.info(f"Request: {json.dumps(log_data)}")
-    
-    # Create a new request with the already read body
-    new_request = Request(
-        scope=request.scope,
-        receive=request._receive,
-    )
-    
-    # Process the request
-    response = await call_next(new_request)
+    # Process the request without trying to read/reconstruct the body
+    response = await call_next(request)
     
     # Create a response log
     response_log = {
         "timestamp": datetime.utcnow().isoformat(),
+        "request_id": request_id,
         "statusCode": response.status_code,
-        "headers": dict(response.headers),
     }
     
     logger.info(f"Response: {json.dumps(response_log)}")
@@ -118,22 +98,33 @@ async def create_transaction(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_role(["admin", "agent"]))
 ):
-    # Create transaction object
-    db_transaction = TransactionModel(
-        customer=transaction.customer,
-        timestamp=transaction.timestamp,
-        status=TransactionStatus.SUBMITTED,  # Always start with submitted status
-        vendor_id=transaction.vendor_id,
-        amount=transaction.amount
-    )
-    
-    # Save to database
-    db.add(db_transaction)
-    db.commit()
-    db.refresh(db_transaction)
-    
-    logger.info(f"Transaction created: ID={db_transaction.id}, Customer={transaction.customer}")
-    return db_transaction
+    try:
+        # Log the incoming transaction data for debugging
+        logger.info(f"Creating transaction: {transaction.dict()}")
+        
+        # Create transaction object
+        db_transaction = TransactionModel(
+            customer=transaction.customer,
+            timestamp=transaction.timestamp,
+            status=TransactionStatus.SUBMITTED,  # Always start with submitted status
+            vendor_id=transaction.vendor_id,
+            amount=transaction.amount
+        )
+        
+        # Save to database
+        db.add(db_transaction)
+        db.commit()
+        db.refresh(db_transaction)
+        
+        logger.info(f"Transaction created: ID={db_transaction.id}, Customer={transaction.customer}")
+        return db_transaction
+    except Exception as e:
+        # Log detailed error for debugging
+        logger.error(f"Error creating transaction: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create transaction: {str(e)}"
+        )
 
 # New endpoint with simpler URL structure
 @app.get("/transactions", response_model=List[Transaction])

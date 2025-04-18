@@ -4,7 +4,7 @@
 AUTH_PORT=${AUTHENTICATION_PORT:-8080}
 TRANS_PORT=${TRANSACTION_PORT:-8081}
 USERNAME=${TEST_USERNAME:-admin}
-PASSWORD=${TEST_PASSWORD:-admin}
+PASSWORD=${TEST_PASSWORD:-admin123}
 
 echo "==============================================="
 echo "Testing Fraud Detection Services"
@@ -47,6 +47,8 @@ auth_response=$(curl -s -X POST "http://localhost:$AUTH_PORT/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "username=$USERNAME&password=$PASSWORD")
 
+echo "DEBUG - Auth response: $auth_response"
+
 # Extract token
 token=$(echo "$auth_response" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
@@ -63,6 +65,8 @@ echo ""
 echo "Testing Transaction API access..."
 transactions_response=$(curl -s -X GET "http://localhost:$TRANS_PORT/transactions" \
     -H "Authorization: Bearer $token")
+
+echo "DEBUG - Transactions response: $transactions_response"
 
 # Check if response seems valid (contains data structure of transactions)
 if [[ "$transactions_response" == *"["* ]] || [[ "$transactions_response" == *"{"* ]]; then

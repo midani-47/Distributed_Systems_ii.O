@@ -6,7 +6,7 @@
 AUTH_PORT=${AUTHENTICATION_PORT:-8080}
 TRANS_PORT=${TRANSACTION_PORT:-8081}
 USERNAME=${TEST_USERNAME:-admin}
-PASSWORD=${TEST_PASSWORD:-admin}
+PASSWORD=${TEST_PASSWORD:-admin123}
 
 echo "==============================================="
 echo "Fraud Detection Services - Universal Test Script"

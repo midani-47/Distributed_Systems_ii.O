@@ -81,50 +81,30 @@ async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     client_host = request.client.host if request.client else "unknown"
     
-    # Read request body
-    body = b""
-    async for chunk in request.stream():
-        body += chunk
-    
-    # Get port from environment or default
+    # Log request path and method without reading the body
     port = os.environ.get("AUTHENTICATION_PORT", 8080)
     
-    # Log request
+    # Log basic request info without body to avoid streaming issues
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
+        "request_id": request_id,
         "source": client_host,
         "destination": f"auth_service:{port}{request.url.path}",
-        "headers": dict(request.headers),
-        "metadata": {
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": dict(request.query_params),
-        }
+        "method": request.method,
+        "path": request.url.path,
+        "query_params": dict(request.query_params),
     }
     
-    # Log body if it exists and is JSON
-    if body:
-        try:
-            log_data["body"] = json.loads(body)
-        except:
-            log_data["body"] = body.decode('utf-8', errors='replace')
+    logger.info(f"Request started: {json.dumps(log_data)}")
     
-    logger.info(f"Request: {json.dumps(log_data)}")
-    
-    # Create a new request with the already read body
-    new_request = Request(
-        scope=request.scope,
-        receive=request._receive,
-    )
-    
-    # Process the request
-    response = await call_next(new_request)
+    # Process the request without trying to read/reconstruct the body
+    response = await call_next(request)
     
     # Create a response log
     response_log = {
         "timestamp": datetime.utcnow().isoformat(),
+        "request_id": request_id,
         "statusCode": response.status_code,
-        "headers": dict(response.headers),
     }
     
     logger.info(f"Response: {json.dumps(response_log)}")
@@ -169,18 +149,48 @@ async def login_for_access_token_legacy(login_data: LoginRequest):
     )
     
     logger.info(f"User logged in successfully: {user.username}")
-    return {"token": token}
+    return {"access_token": token, "token_type": "bearer"}
 
 @app.get("/api/auth/verify")
 async def verify_token_endpoint(token: str):
     """Verify if a token is valid and return role information"""
+    # Add debug logging
+    logger.info(f"Received verification request for token: {token[:10] if len(token) > 10 else token}...")
+    
     token_data = verify_token(token)
     if not token_data:
         logger.warning("Token verification failed")
         return {"valid": False}
     
-    logger.info(f"Token verified for user: {token_data['username']}")
+    logger.info(f"Token verified for user: {token_data['username']}, role: {token_data['role']}")
     return {"valid": True, "role": token_data["role"]}
+
+# Also add a more standard OAuth2 verification endpoint
+@app.get("/verify-token")
+async def verify_token_standard(token: str = None, authorization: str = None):
+    """Alternative token verification endpoint supporting both query param and header"""
+    # Get token from either query param or Authorization header
+    actual_token = None
+    
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization[7:]  # Remove 'Bearer ' prefix
+        logger.info("Token extracted from Authorization header")
+    elif token:
+        actual_token = token
+        logger.info("Token extracted from query parameter")
+    else:
+        logger.warning("No token provided")
+        return {"valid": False, "error": "No token provided"}
+    
+    logger.info(f"Verifying token: {actual_token[:10] if len(actual_token) > 10 else actual_token}...")
+    token_data = verify_token(actual_token)
+    
+    if not token_data:
+        logger.warning("Token verification failed")
+        return {"valid": False, "error": "Invalid token"}
+    
+    logger.info(f"Token verified for user: {token_data['username']}, role: {token_data['role']}")
+    return {"valid": True, "role": token_data["role"], "username": token_data["username"]}
 
 # Admin endpoints for user management
 @app.post("/api/users", response_model=UserResponse)
