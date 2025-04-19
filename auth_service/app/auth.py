@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 from app.models import TokenData, UserInDB
-from app.database import get_user, verify_password
+from app.users import get_user, verify_password
 import logging
 
 # Configure logger

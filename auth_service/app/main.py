@@ -7,13 +7,13 @@ from contextlib import asynccontextmanager
 try:
     # First try relative imports for running as module
     from app.models import Token, UserCreate, UserResponse, User, LoginRequest
-    from app.database import get_user, create_user, delete_user, initialize_users
+    from app.users import get_user, create_user, delete_user, initialize_users
     from app.auth import authenticate_user, create_access_token, verify_token, cleanup_expired_tokens
     from app.logger import get_logger, RequestResponseFilter
 except ImportError:
     # Fall back to direct imports for running directly
     from models import Token, UserCreate, UserResponse, User, LoginRequest
-    from database import get_user, create_user, delete_user, initialize_users
+    from users import get_user, create_user, delete_user, initialize_users
     from auth import authenticate_user, create_access_token, verify_token, cleanup_expired_tokens
     from logger import get_logger, RequestResponseFilter
 import logging
