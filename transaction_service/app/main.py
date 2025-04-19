@@ -150,37 +150,6 @@ async def create_transaction(
             detail=f"Failed to create transaction: {str(e)}"
         )
 
-# New endpoint with simpler URL structure
-@app.get("/transactions", response_model=List[Transaction])
-async def read_transactions_simple(
-    skip: int = 0,
-    limit: int = 100,
-    status: Optional[TransactionStatus] = None,
-    db: Session = Depends(get_db),
-    user_data: dict = Depends(verify_token)
-):
-    query = db.query(TransactionModel)
-    
-    # Apply status filter if provided
-    if status:
-        query = query.filter(TransactionModel.status == status)
-    
-    db_transactions = query.offset(skip).limit(limit).all()
-    
-    # Convert SQLAlchemy models to dicts for proper serialization
-    transactions = []
-    for db_transaction in db_transactions:
-        transactions.append({
-            "id": db_transaction.id,
-            "customer": db_transaction.customer,
-            "timestamp": db_transaction.timestamp,
-            "status": db_transaction.status,
-            "vendor_id": db_transaction.vendor_id,
-            "amount": db_transaction.amount
-        })
-    
-    logger.info(f"Retrieved {len(transactions)} transactions")
-    return transactions
 
 @app.get("/api/transactions", response_model=List[Transaction])
 async def read_transactions(
@@ -352,4 +321,4 @@ if __name__ == "__main__":
     # Get port from environment variable or use default 8081
     port = int(os.environ.get("TRANSACTION_PORT", 8081))
     print(f"Starting Transaction Service on port {port} with debug mode...")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True) 
+    uvicorn.run("app.main:app", host="localhost", port=port, reload=True) 

@@ -126,26 +126,6 @@ async def log_requests(request: Request, call_next):
     return response
 
 # Authentication endpoints
-@app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
-    if not user:
-        logger.warning(f"Failed login attempt for user: {form_data.username}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password"
-        )
-    
-    # Generate token with username and role
-    token = create_access_token(
-        username=user.username,
-        role=user.role
-    )
-    
-    logger.info(f"User logged in successfully: {user.username}")
-    return {"access_token": token, "token_type": "bearer"}
-
-# Also keep the original endpoint for backward compatibility
 @app.post("/api/auth/login", response_model=Token)
 async def login_for_access_token_legacy(login_data: LoginRequest):
     user = authenticate_user(login_data.username, login_data.password)
@@ -179,32 +159,6 @@ async def verify_token_endpoint(token: str):
     logger.info(f"Token verified for user: {token_data['username']}, role: {token_data['role']}")
     return {"valid": True, "role": token_data["role"]}
 
-# Also add a more standard OAuth2 verification endpoint
-@app.get("/verify-token")
-async def verify_token_standard(token: str = None, authorization: str = None):
-    """Alternative token verification endpoint supporting both query param and header"""
-    # Get token from either query param or Authorization header
-    actual_token = None
-    
-    if authorization and authorization.startswith("Bearer "):
-        actual_token = authorization[7:]  # Remove 'Bearer ' prefix
-        logger.info("Token extracted from Authorization header")
-    elif token:
-        actual_token = token
-        logger.info("Token extracted from query parameter")
-    else:
-        logger.warning("No token provided")
-        return {"valid": False, "error": "No token provided"}
-    
-    logger.info(f"Verifying token: {actual_token[:10] if len(actual_token) > 10 else actual_token}...")
-    token_data = verify_token(actual_token)
-    
-    if not token_data:
-        logger.warning("Token verification failed")
-        return {"valid": False, "error": "Invalid token"}
-    
-    logger.info(f"Token verified for user: {token_data['username']}, role: {token_data['role']}")
-    return {"valid": True, "role": token_data["role"], "username": token_data["username"]}
 
 # Admin endpoints for user management
 @app.post("/api/users", response_model=UserResponse)
@@ -254,4 +208,4 @@ if __name__ == "__main__":
     # Get port from environment variable or use default 8080
     port = int(os.environ.get("AUTHENTICATION_PORT", 8080))
     print(f"Starting Authentication Service on port {port} with debug mode...")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True) 
+    uvicorn.run("app.main:app", host="localhost", port=port, reload=True) 
