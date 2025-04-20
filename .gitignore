@@ -19,6 +19,9 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+venv
+.venv
+.venv/
 
 # SQLite
 *.db
