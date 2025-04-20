@@ -26,14 +26,11 @@ python -m app.main
 
 ### 1. Login as an admin user
 
-```bash
-curl -X 'POST' \
-  'http://localhost:8000/api/auth/login' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "username": "admin",
-  "password": "admin123"
-}'
+```powershell
+curl -Method POST `
+  -Uri "http://localhost:8080/api/auth/login" `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{ "username": "admin", "password": "admin123" }'
 ```
 
 Expected response:
@@ -45,21 +42,18 @@ Expected response:
 
 ### 2. Login as a secretary user
 
-```bash
-curl -X 'POST' \
-  'http://localhost:8000/api/auth/login' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "username": "secretary",
-  "password": "secretary123"
-}'
+```powershell
+curl -Method POST `
+  -Uri "http://localhost:8080/api/auth/login" `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{ "username": "secretary", "password": "secretary123" }'
 ```
 
 ### 3. Verify a token (replace with your token)
 
-```bash
-curl -X 'GET' \
-  'http://localhost:8000/api/auth/verify?token=YOUR_TOKEN'
+```powershell
+curl -Method GET `
+  -Uri "http://localhost:8080/api/auth/verify?token=YOUR_TOKEN"
 ```
 
 Expected response:
@@ -74,16 +68,14 @@ Expected response:
 
 ### 1. Create a transaction (with admin token)
 
-```bash
-curl -X 'POST' \
-  'http://localhost:8001/api/transactions' \
-  -H 'Authorization: Bearer YOUR_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "customer": "John Doe",
-  "vendor_id": "VENDOR123",
-  "amount": 1000.50
-}'
+```powershell
+curl -Method POST `
+  -Uri "http://localhost:8081/api/transactions" `
+  -Headers @{
+    "Authorization" = "Bearer YOUR_TOKEN"
+    "Content-Type"  = "application/json"
+  } `
+  -Body '{ "customer": "John Doe", "vendor_id": "VENDOR123", "amount": 1000.50 }'
 ```
 
 Expected response:
@@ -100,31 +92,30 @@ Expected response:
 
 ### 2. List all transactions
 
-```bash
-curl -X 'GET' \
-  'http://localhost:8001/api/transactions' \
-  -H 'Authorization: Bearer YOUR_TOKEN'
+```powershell
+curl -Method GET `
+  -Uri "http://localhost:8081/api/transactions" `
+  -Headers @{ "Authorization" = "Bearer YOUR_TOKEN" }
 ```
 
 ### 3. Add a prediction result for transaction 1
 
-```bash
-curl -X 'POST' \
-  'http://localhost:8001/api/transactions/1/results' \
-  -H 'Authorization: Bearer YOUR_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "is_fraudulent": false,
-  "confidence": 0.95
-}'
+```powershell
+curl -Method POST `
+  -Uri "http://localhost:8081/api/transactions/1/results" `
+  -Headers @{
+    "Authorization" = "Bearer YOUR_TOKEN"
+    "Content-Type"  = "application/json"
+  } `
+  -Body '{ "is_fraudulent": false, "confidence": 0.95 }'
 ```
 
 ### 4. Get transaction details including fraud prediction
 
-```bash
-curl -X 'GET' \
-  'http://localhost:8001/api/transactions/1' \
-  -H 'Authorization: Bearer YOUR_TOKEN'
+```powershell
+curl -Method GET `
+  -Uri "http://localhost:8081/api/transactions/1" `
+  -Headers @{ "Authorization" = "Bearer YOUR_TOKEN" }
 ```
 
 Expected response:
@@ -143,34 +134,33 @@ Expected response:
 
 ### 5. Update transaction status
 
-```bash
-curl -X 'PUT' \
-  'http://localhost:8001/api/transactions/1?status=accepted' \
-  -H 'Authorization: Bearer YOUR_TOKEN'
+```powershell
+curl -Method PUT `
+  -Uri "http://localhost:8081/api/transactions/1?status=accepted" `
+  -Headers @{ "Authorization" = "Bearer YOUR_TOKEN" }
 ```
 
 ### 6. Get prediction results for transaction 1
 
-```bash
-curl -X 'GET' \
-  'http://localhost:8001/api/transactions/1/results' \
-  -H 'Authorization: Bearer YOUR_TOKEN'
+```powershell
+curl -Method GET `
+  -Uri "http://localhost:8081/api/transactions/1/results" `
+  -Headers @{ "Authorization" = "Bearer YOUR_TOKEN" }
 ```
+note 1 is the ID, change number to desired input
 
 ## Testing Authorization Restrictions
 
 ### 1. Try to create a transaction using secretary token (should fail)
 
-```bash
-curl -X 'POST' \
-  'http://localhost:8001/api/transactions' \
-  -H 'Authorization: Bearer SECRETARY_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "customer": "John Doe",
-  "vendor_id": "VENDOR123",
-  "amount": 500
-}'
+```powershell
+curl -Method POST `
+  -Uri "http://localhost:8081/api/transactions" `
+  -Headers @{
+    "Authorization" = "Bearer SECRETARY_TOKEN"
+    "Content-Type"  = "application/json"
+  } `
+  -Body '{ "customer": "John Doe", "vendor_id": "VENDOR123", "amount": 500 }'
 ```
 
 Expected response:
@@ -182,15 +172,11 @@ Expected response:
 
 ### 2. Try to create a transaction without token (should fail)
 
-```bash
-curl -X 'POST' \
-  'http://localhost:8001/api/transactions' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "customer": "John Doe",
-  "vendor_id": "VENDOR123",
-  "amount": 500
-}'
+```powershell
+curl -Method POST `
+  -Uri "http://localhost:8081/api/transactions" `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{ "customer": "John Doe", "vendor_id": "VENDOR123", "amount": 500 }'
 ```
 
 Expected response:
