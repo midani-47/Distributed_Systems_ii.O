@@ -56,30 +56,65 @@ def kill_process_on_port(port):
     """Kill the process using the specified port"""
     print_warning(f"Port {port} is already in use.")
     
-    for proc in psutil.process_iter(['pid', 'name', 'connections']):
+    # On Windows, use netstat to find the process ID
+    if platform.system() == "Windows":
         try:
-            # Check for connections
-            for conn in proc.connections(kind='inet'):
-                if conn.laddr.port == port:
-                    print_warning(f"Found process using port {port}: {proc.name()} (PID: {proc.pid})")
-                    print_warning(f"Stopping process...")
+            # Use netstat with the -a -n -o flags to get port and PID info
+            output = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True).decode('utf-8')
+            if output:
+                # Parse the output to get the PID
+                lines = output.strip().split('\n')
+                for line in lines:
+                    if f":{port}" in line and "LISTENING" in line:
+                        parts = line.strip().split()
+                        if len(parts) >= 5:
+                            pid = int(parts[-1])
+                            print_warning(f"Found process with PID {pid} using port {port}")
+                            try:
+                                process = psutil.Process(pid)
+                                print_warning(f"Stopping process: {process.name()} (PID: {pid})...")
+                                process.terminate()
+                                try:
+                                    process.wait(timeout=3)
+                                    print_success(f"Process terminated")
+                                    return True
+                                except psutil.TimeoutExpired:
+                                    process.kill()
+                                    print_success(f"Process killed")
+                                    return True
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                print_error(f"Failed to kill process with PID {pid}")
+            print_warning(f"No process found listening on port {port}")
+            return False
+        except subprocess.CalledProcessError:
+            print_warning(f"No process found using port {port}")
+            return False
+    else:
+        # For Unix systems, use lsof
+        try:
+            output = subprocess.check_output(f"lsof -i :{port} -t", shell=True).decode('utf-8')
+            if output:
+                pid = int(output.strip())
+                print_warning(f"Found process with PID {pid} using port {port}")
+                try:
+                    process = psutil.Process(pid)
+                    print_warning(f"Stopping process: {process.name()} (PID: {pid})...")
+                    process.terminate()
                     try:
-                        proc.terminate()
-                        proc.wait(timeout=3)
+                        process.wait(timeout=3)
                         print_success("Process terminated")
                         return True
-                    except:
-                        try:
-                            proc.kill()
-                            print_success("Process killed")
-                            return True
-                        except:
-                            print_error(f"Failed to kill process on port {port}")
-                            return False
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
+                    except psutil.TimeoutExpired:
+                        process.kill()
+                        print_success("Process killed")
+                        return True
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    print_error(f"Failed to kill process with PID {pid}")
+            return False
+        except subprocess.CalledProcessError:
+            print_warning(f"No process found using port {port}")
+            return False
     
-    print_warning(f"No process found using port {port}")
     return False
 
 def ensure_logs_directory():
