@@ -169,8 +169,8 @@ curl -Method POST `
 Expected response:
 ```json
 {
-  "detail": "Access denied: role secretary not allowed"
-}
+curl : {"detail":"Not authorized. Required roles: admin, agent"}
+...}
 ```
 
 ### 2. Try to create a transaction without token (should fail)
