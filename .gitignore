@@ -37,6 +37,8 @@ logs/
 .vscode/
 *.swp
 *.swo
+*.db
+
 
 # OS specific
 .DS_Store
