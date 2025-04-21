@@ -1,8 +1,26 @@
 import os
-import aiohttp
+import sys
+import subprocess
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.logger import get_logger
+
+# First try to ensure aiohttp is installed
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    print("aiohttp not found, attempting to install...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "aiohttp>=3.8.0"])
+        import aiohttp
+        AIOHTTP_AVAILABLE = True
+        print("aiohttp installed successfully")
+    except Exception as e:
+        print(f"Failed to install aiohttp: {e}")
+        print("Will use requests library as fallback")
+        AIOHTTP_AVAILABLE = False
+        import requests
 
 # Configure authentication settings using environment variable or default to localhost
 AUTH_SERVICE_URL = os.environ.get("AUTH_SERVICE_URL", "http://localhost:8080")
@@ -31,13 +49,30 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
     
     try:
         # Log the request for debugging
-        logger.info(f"Sending verification request to: {AUTH_SERVICE_URL}/verify-token")
+        logger.info(f"Sending verification request to: {AUTH_SERVICE_URL}/api/auth/verify")
         
+        if AIOHTTP_AVAILABLE:
+            # Use aiohttp for async HTTP requests
+            return await verify_token_aiohttp(token)
+        else:
+            # Use requests as fallback
+            return verify_token_requests(token)
+    
+    except Exception as e:
+        logger.error(f"Error connecting to auth service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable"
+        )
+
+async def verify_token_aiohttp(token):
+    """Use aiohttp to verify the token (async)"""
+    try:
         # Use aiohttp for asynchronous HTTP requests
         async with aiohttp.ClientSession() as session:
-            # First try the new endpoint with standard query parameter
+            # Try the primary endpoint
             async with session.get(
-                f"{AUTH_SERVICE_URL}/verify-token",
+                f"{AUTH_SERVICE_URL}/api/auth/verify",
                 params={"token": token},
                 timeout=10  # Add timeout to prevent hanging
             ) as response:
@@ -51,28 +86,13 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
                 # Check for successful response
                 if status_code != 200:
                     logger.warning(f"Token verification failed with status {status_code}")
-                    
-                    # Fallback to legacy endpoint if the new one fails
-                    logger.info("Trying legacy verification endpoint...")
-                    print(f"  Fallback to legacy endpoint: {AUTH_SERVICE_URL}/api/auth/verify")
-                    
-                    async with session.get(
-                        f"{AUTH_SERVICE_URL}/api/auth/verify",
-                        params={"token": token},
-                        timeout=10
-                    ) as legacy_response:
-                        if legacy_response.status != 200:
-                            logger.error(f"Both token verification endpoints failed")
-                            print(f"  Both verification endpoints failed!")
-                            raise HTTPException(
-                                status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Invalid authentication credentials"
-                            )
-                        verification_result = await legacy_response.json()
-                        print(f"  Legacy response: {verification_result}")
-                else:
-                    # Parse the JSON response
-                    verification_result = await response.json()
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid authentication credentials"
+                    )
+                
+                # Parse the JSON response
+                verification_result = await response.json()
                 
                 logger.info(f"Auth service response body: {str(verification_result)[:100]}")
                 print(f"  Verification result: {verification_result}")
@@ -104,6 +124,66 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
                 return {"role": role}
     
     except aiohttp.ClientError as e:
+        logger.error(f"Error connecting to auth service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable"
+        )
+
+def verify_token_requests(token):
+    """Use synchronous requests to verify the token (fallback)"""
+    try:
+        # Use regular requests as fallback
+        response = requests.get(
+            f"{AUTH_SERVICE_URL}/api/auth/verify",
+            params={"token": token},
+            timeout=10
+        )
+        
+        # Log the response
+        status_code = response.status_code
+        logger.info(f"Auth service response status: {status_code}")
+        print(f"[SERVICE-COMM] Auth Service -> Transaction | Response: {status_code}")
+        
+        if status_code != 200:
+            logger.warning(f"Token verification failed with status {status_code}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials"
+            )
+        
+        # Parse JSON response
+        verification_result = response.json()
+        logger.info(f"Auth service response body: {str(verification_result)[:100]}")
+        print(f"  Verification result: {verification_result}")
+        
+        if not verification_result.get("valid", False):
+            logger.warning("Token reported as invalid by auth service")
+            print(f"  Token invalid: {verification_result.get('error', 'Unknown error')}")
+            
+            # Include any error message from the auth service
+            error_detail = verification_result.get("error", "Invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=error_detail
+            )
+        
+        # Extract role from token
+        role = verification_result.get("role")
+        
+        if not role:
+            logger.warning("Token missing role information")
+            print(f"  Token missing role information!")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token data: missing role"
+            )
+        
+        logger.info(f"Token verified with role: {role}")
+        print(f"  Token verified successfully with role: {role}")
+        return {"role": role}
+        
+    except requests.RequestException as e:
         logger.error(f"Error connecting to auth service: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

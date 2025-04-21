@@ -1,8 +1,39 @@
 from passlib.context import CryptContext
 from app.models import User, UserInDB, UserCreate
+import sys
+import subprocess
+import logging
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Try to ensure bcrypt is installed
+try:
+    # Explicitly install bcrypt first if needed
+    try:
+        import bcrypt
+    except ImportError:
+        print("bcrypt not found, attempting to install...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "bcrypt>=4.0.1,<5.0.0"])
+            import bcrypt
+            print("bcrypt installed successfully")
+        except Exception as e:
+            print(f"Failed to install bcrypt: {e}")
+            print("Please install bcrypt manually with: pip install bcrypt>=4.0.1,<5.0.0")
+            # Use a fallback scheme if bcrypt isn't available
+            pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
+    
+    # Set up the password context - this will work regardless of bcrypt version
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    
+    # Quick test to verify bcrypt functionality
+    test_hash = pwd_context.hash("test")
+    if not pwd_context.verify("test", test_hash):
+        print("Warning: bcrypt verification failed, using fallback")
+        pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
+    
+except Exception as e:
+    print(f"Error setting up password hashing: {e}")
+    print("Using SHA-256 as fallback")
+    pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 # In-memory user database
 users_db = {}

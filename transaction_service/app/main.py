@@ -5,8 +5,18 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+# Adjust SQLAlchemy import to avoid compatibility issues with Python 3.12+
+import sqlalchemy
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
+import sys
+
+# Add the current directory to the path to help with imports 
+# when running as python -m app.main
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
 
 try:
     # First try relative imports for running as module
@@ -15,11 +25,18 @@ try:
     from app.auth import verify_token, require_role
     from app.logger import get_logger, RequestResponseFilter
 except ImportError:
-    # Fall back to direct imports for running directly
-    from models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
-    from database import get_db, create_tables, TransactionModel, ResultModel
-    from auth import verify_token, require_role
-    from logger import get_logger, RequestResponseFilter
+    try:
+        # Fall back to direct imports for running directly
+        from models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
+        from database import get_db, create_tables, TransactionModel, ResultModel
+        from auth import verify_token, require_role
+        from logger import get_logger, RequestResponseFilter
+    except ImportError:
+        # Last resort - try importing from transaction_service
+        from transaction_service.app.models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
+        from transaction_service.app.database import get_db, create_tables, TransactionModel, ResultModel
+        from transaction_service.app.auth import verify_token, require_role
+        from transaction_service.app.logger import get_logger, RequestResponseFilter
 
 # Create logs directory if it doesn't exist
 os.makedirs("logs", exist_ok=True)
