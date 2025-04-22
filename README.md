@@ -1,117 +1,80 @@
 # Fraud Detection and Authentication System
 
-This repository contains a distributed system for fraud detection with authentication.
+A distributed microservices application for financial transaction management with fraud detection capabilities. The system consists of two main services:
 
-## System Components
+1. **Authentication Service**: User authentication and token-based security
+2. **Transaction Service**: Financial transaction management and fraud prediction
 
-- **Authentication Service**: Handles user authentication and token management.
-- **Transaction Service**: Manages financial transactions and fraud predictions.
-
-## Setup and Running the System
-
-### Prerequisites
+## System Requirements
 
 - Python 3.8 or higher
 - Virtual environment (venv)
 
-### Setup Virtual Environment
+## Quick Setup
 
 ```bash
 # Create virtual environment
 python -m venv venv
 
-# Activate virtual environment (Linux/Mac)
-source venv/bin/activate
-
 # Activate virtual environment (Windows)
-# venv\Scripts\activate
-```
+venv\Scripts\activate
 
-### Install Required Packages
+# Activate virtual environment (Linux/Mac)
+# source venv/bin/activate
 
-```bash
+# Install required packages
 pip install -r requirements.txt
+
+# Iff errors, ensure critical dependencies are installed properly
+pip install bcrypt>=3.2.2 aiohttp>=3.8.0
 ```
 
 ## Running the Services
 
-To run both services, use the provided start script:
+Please refer to TEST_COMMANDS.MD
 
-```bash
-# Make the script executable if needed
-chmod +x start.sh
 
-# Run the services
-./start.sh
+
+## Project Structure
+
+```
+.
+├── auth_service/         # Authentication service
+│   └── app/
+│       ├── main.py       # API endpoints and service configuration
+│       ├── auth.py       # Token generation and verification
+│       ├── users.py      # User management
+│       ├── models.py     # Data models
+│       └── logger.py     # Logging configuration
+│
+├── transaction_service/  # Transaction service
+│   └── app/
+│       ├── main.py       # API endpoints and service configuration
+│       ├── auth.py       # Token validation
+│       ├── database.py   # Database connections and models
+│       ├── models.py     # Data models
+│       └── logger.py     # Logging configuration
+│
+├── requirements.txt      # Project dependencies
+└── README.md             # This documentation
 ```
 
-The services will be available at:
-- Authentication Service: http://localhost:8080/docs
-- Transaction Service: http://localhost:8081/docs
+## Technology Choices
 
-To stop the services, press Ctrl+C in the terminal window or run:
-```bash
-./stop_services.sh
-```
+- **FastAPI**: High-performance asynchronous API framework
+- **SQLAlchemy**: SQL toolkit and ORM for database interactions
+- **SQLite**: Lightweight embedded database for transaction persistence
+- **Passlib/bcrypt**: Secure password hashing
+- **Python-jose**: JWT token generation and validation
 
-## API Usage Examples
+## Common Issues
 
-### Authentication
+- If you encounter module import errors, ensure you're running using the module syntax (`python -m auth_service.app.main`)
+- For Windows users, ensure bcrypt is properly installed with `pip install bcrypt>=3.2.2`
 
-1. Get authentication token:
+For detailed technical documentation, see [DOCUMENTATION.md](DOCUMENTATION.md). 
 
-```bash
-curl -X 'POST' 'http://localhost:8080/token' \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'username=admin&password=admin'
-```
 
-Response:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
-```
-
-2. Use the token with Transaction Service:
-
-```bash
-curl -X 'GET' 'http://localhost:8081/transactions' \
-  -H 'Authorization: Bearer YOUR_TOKEN_HERE'
-```
-
-## Default Users
-
-- **Admin User**:
-  - Username: admin
-  - Password: admin123
-  - Role: admin
-
-- **Agent User**:
-  - Username: agent
-  - Password: agent123
-  - Role: agent
-  
-## Troubleshooting
-
-If you encounter issues:
-
-1. Check the log files in the `logs` directory
-   - Authentication Service: `logs/auth_service.log`
-   - Transaction Service: `logs/transaction_service.log`
-   
-2. Ensure ports 8080 and 8081 are available:
-   - On macOS/Linux: `lsof -i:8080` and `lsof -i:8081`
-   - On Windows: `netstat -ano | findstr :8080` and `netstat -ano | findstr :8081`
-
-3. Make sure Python dependencies are installed correctly:
-   ```bash
-   pip list | grep fastapi
-   pip list | grep uvicorn
-   ```
-
-## Important Notes
-
-- For security purposes, never use the default admin credentials in a production environment.
-- The system is configured to run locally. For production deployment, additional security measures would be required. 
+## Authors
+- Nevin Joseph
+- Abed Midani

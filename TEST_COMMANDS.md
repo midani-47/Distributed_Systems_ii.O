@@ -1,14 +1,22 @@
 # Testing the Authentication and Transaction Services
 
-This document provides curl commands to test both services once they are running. You'll need to use two terminal windows, one for each service.
+## API Testing
 
-## Prerequisites
+The services expose REST APIs documented with Swagger UI. Access the /docs endpoint of each service to explore and test the available endpoints.
 
-Before running the tests, you need to:
+### Default Users
 
-1. Install Python 3.8+ and pip
-2. Install the Rust compiler (required for pydantic): https://rustup.rs/
-3. Run the services in two separate terminals:
+| Username  | Password      | Role      |
+|-----------|---------------|-----------|
+| admin     | admin123      | admin     |
+| secretary | secretary123  | secretary |
+| agent     | agent123      | agent     |
+
+
+
+
+This document provides curl commands to test both services once they are running. You'll need to use 3 terminal windows. One of them for Curl commands running the methods, and two terminals only for initiating the services (one for each service).
+
 
 Terminal 1 (Auth Service):
 ```bash
@@ -21,6 +29,12 @@ Terminal 2 (Transaction Service):
 cd transaction_service
 python -m app.main
 ```
+
+Once the services are initiated, you could either use the swagger UI available at:
+- Authentication Service: http://localhost:8080/docs
+- Transaction Service: http://localhost:8081/docs
+
+or you could, as we did, continue with the CLI using Powershell syntax as follows (Bash syntax at the end):
 
 ## Test Authentication Service
 
