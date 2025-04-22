@@ -42,8 +42,6 @@ It automatically generates interactive API documentation (Swagger UI and ReDoc) 
 
 - **Passlib/bcrypt**: Implemented for secure password hashing in the Authentication Service. Bcrypt is specifically chosen for its adaptive nature and resistance to brute-force attacks.
 
-- **Python-jose**: Is our token system JWT (JSON Web Token) for generation and validation, providing a mechanism for cross-service authentication.
-
 - **SQLite**: Selected as the database for the Transaction Service for simplicity for demonstration purposes. 
 
 - **Pydantic**: Providing validation for incoming request data.
