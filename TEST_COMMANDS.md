@@ -15,7 +15,7 @@ The services expose REST APIs documented with Swagger UI. Access the /docs endpo
 
 
 
-This document provides curl commands to test both services once they are running. You'll need to use 3 terminal windows; one of them for Curl commands running the methods, and two terminals only for initiating the services (one for each service).
+This document provides curl commands to test both services once they are running. You'll need to use 3 terminal windows; one of them for Curl commands running the methods, and two terminals only for initiating the services (one for each service). The two (split) terminals for initialization should be venv active.
 
 
 Terminal 1 (Auth Service):
@@ -223,9 +223,7 @@ curl -X 'POST' \
 
 Expected response:
 ```json
-{
-  "token": "base64_random_string|admin"
-}
+{"token": "base64_random_string|admin"} # for example
 ```
 
 ### 2. Login as a secretary user
