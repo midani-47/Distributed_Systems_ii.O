@@ -1,8 +1,9 @@
 # Technical Documentation: Fraud Detection and Authentication System
 
 ## Authors
-- Nevin Joseph
 - Abed Midani
+- Nevin Joseph
+
 
 
 ## Table of Contents
