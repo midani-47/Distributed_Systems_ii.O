@@ -78,7 +78,7 @@ Please refer to TEST_COMMANDS.MD
 - **SQLAlchemy**: SQL toolkit and ORM for database interactions
 - **SQLite**: Lightweight embedded database for transaction persistence
 - **Passlib/bcrypt**: Secure password hashing
-- **Python-jose**: JWT token generation and validation
+
 
 ## Common Issues
 
