@@ -33,6 +33,10 @@ pip install -r requirements.txt
 
 # Iff errors, ensure critical dependencies are installed properly
 pip install bcrypt>=3.2.2 aiohttp>=3.8.0
+
+# Please open two more terminals for initiating the services
+
+
 ```
 
 ## Running the Services
