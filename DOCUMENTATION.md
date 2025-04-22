@@ -58,9 +58,9 @@ The Authentication Service is responsible for managing user identity and access 
   - Handles password hashing and verification
 
 - **Token Management (auth.py)**:
-  - Generates JWT tokens upon successful authentication;
-  - validates tokens for protected endpoints; and
-  - handles token expiration and revocation
+  - Generates custom tokens upon successful authentication
+  - Validates tokens for protected endpoints
+  - Handles token expiration and cleanup
 
 - **API Endpoints (main.py)**:
   - `/api/auth/login`: Authenticates users and issues tokens
@@ -71,13 +71,35 @@ The Authentication Service is responsible for managing user identity and access 
 
 1. A client submits credentials to the login endpoint
 2. The service validates credentials against stored user data
-3. If valid, a JWT token containing the user's role and a random identifier is generated
+3. If valid, a custom token containing the user's role and a random identifier is generated
 4. The token is returned to the client for use in subsequent requests
 
 ### Implementation Details
 
 The Authentication Service uses a simple in-memory data store for user information, initialized with default users during startup. In a production environment, this would be replaced with a persistent database.
 
+```python
+# Example token generation process (from auth_service/app/auth.py)
+def create_access_token(username: str, role: str) -> str:
+    # generating random token component for security
+    random_part = base64.b64encode(os.urandom(16)).decode('utf-8')
+    
+    # embedding role information in token structure
+    token = f"{random_part}|{role}"
+    
+    # calculating token expiration time
+    expiry = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    
+    # storing token in memory database with metadata
+    tokens_db[token] = {
+        "username": username,
+        "role": role,
+        "expiry": expiry
+    }
+    
+    logger.info(f"Token created for: {username}")
+    return token
+```
 
 ## Transaction Service
 
@@ -112,7 +134,7 @@ The Transaction Service uses SQLAlchemy as an ORM layer to interact with a SQLit
 2. **results**: Stores prediction results (transaction ID, timestamp, is-fraudulent, confidence)
 
 ```python
-# Database models (simplified)
+# Database models (from transaction_service/app/database.py)
 class TransactionModel(Base):
     __tablename__ = "transactions"
     
@@ -123,7 +145,7 @@ class TransactionModel(Base):
     vendor_id = Column(String, index=True)
     amount = Column(Float)
     
-    # Relationship to results
+    # establishing relationship with results table for ORM
     results = relationship("ResultModel", back_populates="transaction")
 ```
 
@@ -134,23 +156,32 @@ The service implements role-based access control, allowing only users with 'admi
 The system implements several security measures:
 
 1. **Authentication**: Username/password authentication with bcrypt hashing
-2. **Authorization**: JWT tokens with role information for access control
+2. **Authorization**: Custom token system with role information for access control
 3. **Token Validation**: Verification of token validity for each request
 4. **Role-Based Access Control**: Different endpoints accessible based on user role
 
 Token verification occurs at the start of each protected endpoint call through a dependency injection pattern:
 
 ```python
-# Example role-based protection (simplified)
+# Example role-based protection (from transaction_service/app/auth.py)
 def require_role(allowed_roles: list):
+    """
+    Check if the user has one of the allowed roles
+    """
     async def role_checker(user_data: dict = Depends(verify_token)):
         role = user_data.get("role")
+        
+        # enforcing role-based access control
         if role not in allowed_roles:
+            logger.warning(f"Authorization failed: Role {role} not in {allowed_roles}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Not authorized. Required roles: {', '.join(allowed_roles)}"
             )
+        
+        logger.info(f"Authorization successful for role: {role}")
         return user_data
+    
     return role_checker
 ```
 
@@ -202,50 +233,16 @@ Response logs capture:
 Example implementation in the Authentication Service:
 
 ```python
+# Middleware for request logging (from auth_service/app/main.py)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    request_id = str(uuid.uuid4())
-    client_host = request.client.host if request.client else "unknown"
+    # logging request metadata without body content
+    log_request_info(request)
     
-    # Prepare request logging data
-    log_data = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "request_id": request_id,
-        "source": client_host,
-        "destination": f"auth_service:{port}{request.url.path}",
-        "method": request.method,
-        "path": request.url.path,
-        "query_params": dict(request.query_params),
-        "headers": dict(request.headers),
-    }
-    
-    # Print detailed request log to terminal
-    print(f"\n[AUTH-REQUEST] {datetime.utcnow().isoformat()} | {request.method} {request.url.path}")
-    print(f"  Source: {client_host}")
-    print(f"  Headers: {json.dumps(dict(request.headers), indent=2)}")
-    print(f"  Query params: {json.dumps(dict(request.query_params), indent=2)}")
-    
-    # Also log to file
-    logger.info(f"Request: {json.dumps(log_data)}")
-    
-    # Process the request
+    # processing the request through the middleware chain
     response = await call_next(request)
     
-    # Create a response log
-    response_log = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "request_id": request_id,
-        "statusCode": response.status_code,
-        "headers": dict(response.headers),
-    }
-    
-    # Print response log to terminal
-    print(f"[AUTH-RESPONSE] {datetime.utcnow().isoformat()} | Status: {response.status_code}")
-    print(f"  Headers: {json.dumps(dict(response.headers), indent=2)}")
-    
-    # Also log to file
-    logger.info(f"Response: {json.dumps(response_log)}")
-    
+    # endpoints handle their own response logging using LoggingJSONResponse
     return response
 ```
 
@@ -254,13 +251,13 @@ async def log_requests(request: Request, call_next):
 The Transaction Service logs all communication with the Authentication Service:
 
 ```python
-# Log inter-service communication details to terminal
+# Log inter-service communication (from transaction_service/app/auth.py)
+# logging inter-service communication for debugging
 print(f"\n[SERVICE-COMM] Transaction -> Auth Service | Verify Token")
 print(f"  Token: {token[:10]}...")
 
-# After receiving response
+# logging inter-service response
 print(f"[SERVICE-COMM] Auth Service -> Transaction | Response: {status_code}")
-print(f"  Verification result: {verification_result}")
 ```
 
 ### Log File Structure
@@ -296,21 +293,37 @@ The Transaction Service communicates with the Authentication Service for token v
 This communication is implemented using the aiohttp library to make asynchronous HTTP requests, maintaining the non-blocking nature of FastAPI:
 
 ```python
-# Token verification (simplified)
-async def verify_token(token: str):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{AUTH_SERVICE_URL}/api/auth/verify",
-            params={"token": token}
-        ) as response:
-            if response.status == 200:
-                result = await response.json()
-                if result.get("valid"):
-                    return {"role": result.get("role")}
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials"
-            )
+# Token verification (from transaction_service/app/auth.py)
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Verify token with the Authentication Service
+    """
+    token = credentials.credentials
+    logger.info(f"Verifying token: {token[:10] if len(token) > 10 else token}...")
+    
+    # handling multiple Bearer prefixes that can occur with certain clients
+    while token.startswith("Bearer "):
+        token = token[7:]
+    
+    logger.info(f"Clean token after removing Bearer prefix: {token[:10] if len(token) > 10 else token}")
+    
+    # logging inter-service communication for debugging
+    print(f"\n[SERVICE-COMM] Transaction -> Auth Service | Verify Token")
+    print(f"  Token: {token[:10]}...")
+    
+    try:
+        # preparing request to authentication service
+        logger.info(f"Sending verification request to: {AUTH_SERVICE_URL}/verify-token")
+        
+        # using async HTTP client for non-blocking requests
+        async with aiohttp.ClientSession() as session:
+            # attempting verification with primary endpoint
+            async with session.get(
+                f"{AUTH_SERVICE_URL}/verify-token",
+                params={"token": token},
+                timeout=10  # preventing infinite wait on network issues
+            ) as response:
+                # ...rest of implementation
 ```
 
 ## Limitations and Future Improvements
@@ -319,7 +332,7 @@ The current implementation has several limitations that could be addressed in fu
 
 1. **Persistence**: The Authentication Service uses in-memory storage. A production system should use a persistent database.
 
-2. **Token Management**: The current implementation lacks comprehensive token revocation mechanisms.
+2. **Token Security**: The current implementation uses a simple custom token system. A production environment should use a more robust solution like JWT with signature verification.
 
 3. **Service Discovery**: Service endpoints are hardcoded. A production system should implement service discovery.
 
@@ -332,7 +345,7 @@ The current implementation has several limitations that could be addressed in fu
 Future improvements could include:
 
 1. Adding a persistent database for the Authentication Service
-2. Implementing a more robust token management system with token refresh and proper revocation
+2. Implementing a proper JWT token system with signature verification 
 3. Adding a service discovery mechanism using tools like Consul or etcd
 4. Implementing containerization with Docker and orchestration with Kubernetes
 5. Adding comprehensive monitoring and alerting
@@ -342,4 +355,4 @@ Future improvements could include:
 
 The Fraud Detection and Authentication System demonstrates a clean, modular approach to building distributed systems. By separating concerns into distinct microservices and implementing robust inter-service communication, the system provides a foundation that can be extended and improved upon for production use.
 
-The chosen technologies (FastAPI, SQLAlchemy, JWT) provide a modern, performant stack that balances development speed with runtime efficiency. The system's architecture allows for independent scaling and maintenance of the different components, making it suitable for enterprise deployments with appropriate enhancements. 
+The chosen technologies (FastAPI, SQLAlchemy, custom token authentication) provide a modern, performant stack that balances development speed with runtime efficiency. The system's architecture allows for independent scaling and maintenance of the different components, making it suitable for enterprise deployments with appropriate enhancements. 
