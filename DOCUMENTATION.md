@@ -220,7 +220,7 @@ Every logged request contains the following fields:
 - **path**: Full request path including query parameters
 - **headers**: All HTTP headers (with sensitive values redacted)
 - **query_params**: URL query parameters (when present)
-- **body**: Request body (when applicable, may be redacted for sensitive operations)
+- **body**: Request body
 
 Response logs capture:
 
