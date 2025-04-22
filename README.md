@@ -8,7 +8,7 @@ A distributed application for financial transaction management with fraud detect
 
 ## System Stack
 - **FastAPI**: It was an interesting choice for us, because it was a new thing to explore for us. It is said to be fast comparable to others. While being easy to use and intuitive, it was still robust using Python type hints for data validation, serialization, and deserialization right out of the box, leading to fewer bugs.   
-It automatically generates interactive API documentation (Swagger UI and ReDoc) based on our code. It has automatic OpenAPI documentation and native async support.
+It automatically generates interactive API documentation (Swagger UI) based on our code. It has automatic OpenAPI documentation and native async support.
 
 - For other technology stack choices, please refer 
 
