@@ -1,6 +1,7 @@
 # Fraud Detection and Authentication System
 
-A distributed microservices application for financial transaction management with fraud detection capabilities. The system consists of two main services:
+This is a microservices architecture where each service maintains its independence and communicates only through well-defined API interfaces.
+A distributed application for financial transaction management with fraud detection capabilities. The system consists of two main services:
 
 1. **Authentication Service**: User authentication and token-based security
 2. **Transaction Service**: Financial transaction management and fraud prediction
