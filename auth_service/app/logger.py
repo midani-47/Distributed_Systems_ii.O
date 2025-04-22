@@ -10,41 +10,41 @@ def get_logger(name, log_file=None):
         name: Logger name
         log_file: Optional file to log to
     """
-    # Set up logger
+    # create our logger object
     logger = logging.getLogger(name)
     
-    # Return if already configured
+    # if we already got this logger setup just return it
     if logger.handlers:
         return logger
     
-    # Set minimum log level
+    # we only want info and above, no debug stuff
     logger.setLevel(logging.INFO)
     
-    # Basic log format
+    # this is how our logs will look like
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
-    # Add console output
+    # show logs in console for debugging
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(formatter)
     logger.addHandler(console)
     
-    # Add simple file output if requested
+    # save logs to file if they want that
     if log_file:
-        # Create logs directory
+        # make logs directory if it dont exist
         logs_dir = os.path.join(os.getcwd(), "logs")
         os.makedirs(logs_dir, exist_ok=True)
         
-        # Full path to log file
+        # put the log file in the logs directory
         log_path = os.path.join(logs_dir, log_file)
         
-        # Create simple file handler
+        # setup the file logging thing
         file_handler = logging.FileHandler(log_path)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     
     return logger
 
-# Simple filter to add extra fields to log records
+# special filter to add more info to our logs
 class RequestFilter(logging.Filter):
     """
     Add request/response context to log records
@@ -55,7 +55,7 @@ class RequestFilter(logging.Filter):
         self.destination = destination
     
     def filter(self, record):
-        # Add fields to the record
+        # stick some extra info in each log message
         record.source = self.source or "-"
         record.destination = self.destination or "-"
         return True

@@ -1,45 +1,45 @@
 from pydantic import BaseModel
 from typing import Optional
 
-# Basic user model
+# this is our base user model, nothing fancy
 class User(BaseModel):
     """Basic user data model"""
     username: str
     hashed_password: str
-    role: str  # "admin", "secretary", or "agent"
+    role: str  # can be "admin", "secretary", or "agent"
     disabled: bool = False
 
-# User in database
+# user model with db stuff
 class UserInDB(User):
     """User stored in database"""
     pass
 
-# Model for creating new users
+# when someone wants to make a new user
 class UserCreate(BaseModel):
     """Data needed to create a new user"""
     username: str
-    password: str  # Plain password (will be hashed)
+    password: str  # regular password we'll hash it later
     role: str
 
-# Response after creating a user
+# what we send back after creating user
 class UserResponse(BaseModel):
     """User data returned after creation"""
     username: str
     role: str
 
-# Login request data
+# for login requests
 class LoginRequest(BaseModel):
     """Login credentials"""
     username: str
     password: str
 
-# Authentication token
+# the token we give to logged in users
 class Token(BaseModel):
     """Authentication token response"""
     access_token: str
     token_type: str = "bearer"
 
-# Token data
+# whats inside the token
 class TokenData(BaseModel):
     """Data stored in a token"""
     username: Optional[str] = None

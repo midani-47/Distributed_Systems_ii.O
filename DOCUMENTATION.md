@@ -170,45 +170,133 @@ def require_role(allowed_roles: list):
 
 ## Logging System
 
-The system implements comprehensive logging of all requests and responses, recording:
+Our system implements comprehensive request/response logging across both services, capturing all interactions between clients and services as well as inter-service communication.
 
-- Source IP
-- Destination endpoint
-- HTTP headers
-- Request/response timestamps
-- Request parameters
-- Response status codes
+### Logging Architecture
 
-Logs are written to both the console (for development convenience) and to log files:
-- `auth_service.log`: Authentication Service logs
-- `transaction_service.log`: Transaction Service logs
+Each service has its own independent logging system with the following components:
 
-The logging implementation uses Python's standard logging module with custom formatters and handlers:
+1. **Logger Configuration**:
+   - Each service initializes its own logger (auth_service.logger and transaction_service.logger)
+   - Loggers are configured with both console and file handlers
+   - Log files are stored in the `logs` directory with service-specific files
+
+2. **HTTP Middleware**:
+   - Both services implement FastAPI middleware to intercept all HTTP requests and responses
+   - The middleware extracts detailed information before and after request processing
+   - Custom filtering ensures sensitive information (passwords, tokens) is masked or truncated
+
+3. **Log Storage**:
+   - Console output for development convenience
+   - File-based persistent logs for auditing and troubleshooting
+   - Structured JSON format for machine readability
+
+### Log Content
+
+Every logged request contains the following fields:
+
+- **timestamp**: ISO-8601 formatted date and time
+- **request_id**: Unique UUID for correlating requests across services
+- **source**: Client IP address and port (or service name for inter-service calls)
+- **destination**: Service name, port, and endpoint path
+- **method**: HTTP method (GET, POST, PUT, DELETE)
+- **path**: Full request path including query parameters
+- **headers**: All HTTP headers (with sensitive values redacted)
+- **query_params**: URL query parameters (when present)
+- **body**: Request body (when applicable, may be redacted for sensitive operations)
+
+Response logs capture:
+
+- **timestamp**: ISO-8601 formatted date and time
+- **request_id**: Same UUID as the corresponding request
+- **statusCode**: HTTP status code
+- **headers**: Response headers
+- **body**: Response body (may be truncated for large responses)
+
+Example implementation in the Authentication Service:
 
 ```python
-# Logging setup (simplified)
-def get_logger(name, log_file=None):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    client_host = request.client.host if request.client else "unknown"
     
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s - [%(user)s:%(role)s]',
-        '%Y-%m-%d %H:%M:%S'
-    )
+    # Prepare request logging data
+    log_data = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "request_id": request_id,
+        "source": client_host,
+        "destination": f"auth_service:{port}{request.url.path}",
+        "method": request.method,
+        "path": request.url.path,
+        "query_params": dict(request.query_params),
+        "headers": dict(request.headers),
+    }
     
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    # Print detailed request log to terminal
+    print(f"\n[AUTH-REQUEST] {datetime.utcnow().isoformat()} | {request.method} {request.url.path}")
+    print(f"  Source: {client_host}")
+    print(f"  Headers: {json.dumps(dict(request.headers), indent=2)}")
+    print(f"  Query params: {json.dumps(dict(request.query_params), indent=2)}")
     
-    # File handler if specified
-    if log_file:
-        file_handler = logging.FileHandler(f"logs/{log_file}")
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+    # Also log to file
+    logger.info(f"Request: {json.dumps(log_data)}")
     
-    return logger
+    # Process the request
+    response = await call_next(request)
+    
+    # Create a response log
+    response_log = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "request_id": request_id,
+        "statusCode": response.status_code,
+        "headers": dict(response.headers),
+    }
+    
+    # Print response log to terminal
+    print(f"[AUTH-RESPONSE] {datetime.utcnow().isoformat()} | Status: {response.status_code}")
+    print(f"  Headers: {json.dumps(dict(response.headers), indent=2)}")
+    
+    # Also log to file
+    logger.info(f"Response: {json.dumps(response_log)}")
+    
+    return response
 ```
+
+### Inter-Service Logging
+
+The Transaction Service logs all communication with the Authentication Service:
+
+```python
+# Log inter-service communication details to terminal
+print(f"\n[SERVICE-COMM] Transaction -> Auth Service | Verify Token")
+print(f"  Token: {token[:10]}...")
+
+# After receiving response
+print(f"[SERVICE-COMM] Auth Service -> Transaction | Response: {status_code}")
+print(f"  Verification result: {verification_result}")
+```
+
+### Log File Structure
+
+The system creates and maintains the following log directory structure:
+```
+/logs
+  ├── auth_service.log     # Authentication Service logs
+  └── transaction_service.log  # Transaction Service logs
+```
+
+Additional service-specific logs are stored in their respective service directories:
+```
+/auth_service/logs/
+/transaction_service/logs/
+```
+
+### Log Analysis
+
+The logs can be analyzed using standard text processing tools or imported into log analysis platforms. The JSON formatting facilitates structured querying and filtering.
+
+For production environments, we recommend implementing a more robust logging solution using tools like ELK Stack (Elasticsearch, Logstash, Kibana) or Graylog for centralized log collection and analysis.
 
 ## Cross-Service Communication
 
