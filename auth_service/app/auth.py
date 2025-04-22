@@ -2,87 +2,103 @@ import base64
 import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict
-from app.models import TokenData, UserInDB
+from app.models import UserInDB
 from app.users import get_user, verify_password
 import logging
 
-# Configure logger
+# Set up logger
 logger = logging.getLogger("auth_service")
 
-# In-memory token storage
-# Structure: {token: {"username": username, "role": role, "expiry": datetime}}
+# Simple in-memory token storage
+# Format: {token: {"username": str, "role": str, "expiry": datetime}}
 tokens_db: Dict[str, dict] = {}
 
-# Token expiration time in minutes
+# How long tokens are valid for
 TOKEN_EXPIRE_MINUTES = 30
 
 def authenticate_user(username: str, password: str) -> Optional[UserInDB]:
-    """Verify username and password and return user if valid"""
+    """
+    Check if username exists and password is correct
+    Returns the user object if valid, None otherwise
+    """
+    # Get user from database
     user = get_user(username)
     if not user:
         logger.warning(f"User not found: {username}")
         return None
+    
+    # Check password
     if not verify_password(password, user.hashed_password):
-        logger.warning(f"Invalid password for user: {username}")
+        logger.warning(f"Wrong password: {username}")
         return None
+    
     return user
 
 def create_access_token(username: str, role: str) -> str:
-    """Generate a token with expiry timestamp"""
-    # Generate random bytes and encode in base64
-    random_bytes = os.urandom(16)
-    token_part = base64.b64encode(random_bytes).decode('utf-8')
+    """
+    Create a new authentication token
+    Token format: base64(random bytes) + "|" + role
+    """
+    # Create random token part
+    random_part = base64.b64encode(os.urandom(16)).decode('utf-8')
     
-    # Create token as per assignment requirements: Base64(randomBytes) + "|" + role
-    token = f"{token_part}|{role}"
+    # Combine with role to make full token
+    token = f"{random_part}|{role}"
     
-    # Store token with expiry time
+    # Set expiration time
     expiry = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    
+    # Store token in database
     tokens_db[token] = {
         "username": username,
         "role": role,
         "expiry": expiry
     }
     
-    logger.info(f"Created token for user: {username}, token value: {token[:10]}...")
-    logger.info(f"Total tokens in DB: {len(tokens_db)}")
+    logger.info(f"Token created for: {username}")
     return token
 
 def verify_token(token: str) -> Optional[dict]:
-    """Verify token exists and not expired, return user data if valid"""
-    logger.info(f"Verifying token: {token[:10]}...")
-    logger.info(f"Total tokens in DB: {len(tokens_db)}")
-    logger.info(f"Known tokens: {[t[:10] for t in tokens_db.keys()]}")
-    
+    """
+    Check if token exists and is still valid
+    Returns user data if valid, None otherwise
+    """
+    # Check if token exists in database
     if token not in tokens_db:
-        logger.warning("Token not found in database")
+        logger.warning("Unknown token")
         return None
     
     token_data = tokens_db[token]
     
-    # Check if token is expired
+    # Check if token has expired
     if datetime.utcnow() > token_data["expiry"]:
-        logger.warning(f"Token expired for user: {token_data['username']}")
+        logger.warning(f"Expired token for: {token_data['username']}")
         # Remove expired token
         del tokens_db[token]
         return None
     
-    logger.info(f"Token verified for user: {token_data['username']}")
+    # Token is valid
     return {
         "username": token_data["username"],
         "role": token_data["role"],
         "valid": True
     }
 
-# Clean up expired tokens
 def cleanup_expired_tokens():
-    """Remove expired tokens from the token database"""
-    current_time = datetime.utcnow()
-    expired_tokens = [
+    """
+    Remove all expired tokens from database
+    Should be called periodically
+    """
+    now = datetime.utcnow()
+    
+    # Find expired tokens
+    expired = [
         token for token, data in tokens_db.items() 
-        if current_time > data["expiry"]
+        if now > data["expiry"]
     ]
     
-    for token in expired_tokens:
-        logger.info(f"Removing expired token for user: {tokens_db[token]['username']}")
-        del tokens_db[token] 
+    # Remove them
+    for token in expired:
+        username = tokens_db[token]['username']
+        del tokens_db[token]
+        logger.info(f"Removed expired token for: {username}")
