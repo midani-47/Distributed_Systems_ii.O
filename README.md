@@ -89,5 +89,5 @@ For detailed technical documentation, see [DOCUMENTATION.md](DOCUMENTATION.md).
 
 
 ## Authors
-- Nevin Joseph
 - Abed Midani
+- Nevin Joseph
