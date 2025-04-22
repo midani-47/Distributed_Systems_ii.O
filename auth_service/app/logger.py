@@ -10,41 +10,41 @@ def get_logger(name, log_file=None):
         name: Logger name
         log_file: Optional file to log to
     """
-    # create our logger object
+    # instantiating logger with specified name
     logger = logging.getLogger(name)
     
-    # if we already got this logger setup just return it
+    # returning existing logger if already configured
     if logger.handlers:
         return logger
     
-    # we only want info and above, no debug stuff
+    # setting log level to INFO to filter out debug messages
     logger.setLevel(logging.INFO)
     
-    # this is how our logs will look like
+    # defining log format for consistency
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
-    # show logs in console for debugging
+    # adding console output handler for development visibility
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(formatter)
     logger.addHandler(console)
     
-    # save logs to file if they want that
+    # configuring file-based logging if requested
     if log_file:
-        # make logs directory if it dont exist
+        # ensuring logs directory exists
         logs_dir = os.path.join(os.getcwd(), "logs")
         os.makedirs(logs_dir, exist_ok=True)
         
-        # put the log file in the logs directory
+        # constructing full path to log file
         log_path = os.path.join(logs_dir, log_file)
         
-        # setup the file logging thing
+        # setting up file handler for persistent logging
         file_handler = logging.FileHandler(log_path)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     
     return logger
 
-# special filter to add more info to our logs
+# filter for enriching log records with request context
 class RequestFilter(logging.Filter):
     """
     Add request/response context to log records
@@ -55,7 +55,7 @@ class RequestFilter(logging.Filter):
         self.destination = destination
     
     def filter(self, record):
-        # stick some extra info in each log message
+        # augmenting log record with additional context
         record.source = self.source or "-"
         record.destination = self.destination or "-"
         return True

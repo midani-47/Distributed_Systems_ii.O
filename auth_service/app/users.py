@@ -1,10 +1,10 @@
 from passlib.context import CryptContext
 from app.models import UserInDB, UserCreate
 
-# using this for the password thingy bcrypt is cool
+# configuring password hashing with bcrypt for security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# just a simple dictionary for users. not persistent tho
+# in-memory storage for user data, non-persistent between restarts
 users_db = {}
 
 def initialize_users():
@@ -44,22 +44,22 @@ def get_user(username: str) -> UserInDB:
     return None
 
 def create_user(user: UserCreate) -> UserInDB:
-    # this gonna hash the password so nobody can see it
+    # generating secure hash from the provided password
     hashed_password = get_password_hash(user.password)
     
-    # make a new user object with the hashed pwd
+    # creating user object with hashed password
     new_user = UserInDB(
         username=user.username,
         hashed_password=hashed_password,
         role=user.role
     )
     
-    # save it to our dictionary database thingy
+    # storing in the in-memory database
     users_db[user.username] = new_user.dict()
     return new_user
 
 def delete_user(username: str) -> bool:
-    # delete user if exists. pretty simple eh
+    # removing user from database if exists, returning success status
     if username in users_db:
         del users_db[username]
         return True

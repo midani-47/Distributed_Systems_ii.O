@@ -10,42 +10,42 @@ from contextlib import asynccontextmanager
 from starlette.responses import JSONResponse
 
 try:
-    # First try relative imports for running as module
+    # attempting to locate modules via standard application import path
     from app.models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
     from app.database import get_db, create_tables, TransactionModel, ResultModel
     from app.auth import verify_token, require_role
     from app.logger import get_logger
 except ImportError:
-    # Fall back to direct imports for running directly
+    # falling back to direct imports when running as a standalone script
     from models import Transaction, TransactionCreate, TransactionInDB, Prediction, PredictionCreate, TransactionStatus
     from database import get_db, create_tables, TransactionModel, ResultModel
     from auth import verify_token, require_role
     from logger import get_logger
 
-# Create logs directory
+# ensuring logs directory exists for service operation
 os.makedirs("logs", exist_ok=True)
 
-# Set up logger
+# initializing dedicated logger for the transaction service
 logger = get_logger("transaction_service", "transaction_service.log")
 
-# Custom JSON encoder to handle datetime objects
+# custom JSON encoder for proper datetime serialization in logs
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
 
-# Define lifespan context manager for FastAPI startup/shutdown events
+# managing application lifecycle events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create database tables
+    # performing startup initialization: setting up database schema
     create_tables()
     logger.info("Transaction Service started and database initialized")
     yield
-    # Shutdown: Any cleanup can go here if needed
+    # handling graceful shutdown procedures
     logger.info("Transaction Service shutting down")
 
-# Create and configure the application
+# configuring the FastAPI application with metadata
 app = FastAPI(
     title="Transaction Service",
     description="Service for managing financial transactions and fraud predictions",
@@ -54,7 +54,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Setup CORS middleware
+# setting up Cross-Origin Resource Sharing for API accessibility
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,9 +63,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple function to log request info
+# function for structured request logging
 def log_request_info(request: Request, body=None):
-    """Log request information including body if provided"""
+    """Capturing comprehensive request details including optional body content"""
     client_ip = request.client.host if request.client else "unknown"
     port = os.environ.get("TRANSACTION_PORT", 8081)
     destination = f"transaction_service:{port}{request.url.path}"
@@ -85,9 +85,9 @@ def log_request_info(request: Request, body=None):
         
     logger.info(f"Request: {json.dumps(log_data, cls=DateTimeEncoder)}")
 
-# Simple function to log response info
+# function for structured response logging
 def log_response_info(request: Request, status_code: int, body=None):
-    """Log response information including body if provided"""
+    """Recording structured response data for monitoring and audit trails"""
     client_ip = request.client.host if request.client else "unknown"
     port = os.environ.get("TRANSACTION_PORT", 8081)
     source = f"transaction_service:{port}{request.url.path}"
@@ -105,26 +105,26 @@ def log_response_info(request: Request, status_code: int, body=None):
         
     logger.info(f"Response: {json.dumps(log_data, cls=DateTimeEncoder)}")
 
-# Custom response class that logs the response
+# enhanced JSON response class with integrated logging capability
 class LoggingJSONResponse(JSONResponse):
     def __init__(self, content, status_code=200, request=None, **kwargs):
         super().__init__(content=content, status_code=status_code, **kwargs)
         if request:
             log_response_info(request, status_code, content)
 
-# Middleware for request/response logging
+# global middleware for consistent request logging
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Log request without reading the body
+    # capturing initial request metadata before processing
     log_request_info(request)
     
-    # Process the request
+    # passing request through the middleware chain for processing
     response = await call_next(request)
     
-    # Note: We don't log response here because individual endpoints will use LoggingJSONResponse
+    # individual endpoints handle response logging via LoggingJSONResponse
     return response
 
-# Transaction endpoints
+# API endpoint for creating new transaction records
 @app.post("/api/transactions", response_model=Transaction, status_code=status.HTTP_201_CREATED)
 async def create_transaction(
     transaction: TransactionCreate,
@@ -133,24 +133,24 @@ async def create_transaction(
     user_data: dict = Depends(require_role(["admin", "agent"]))
 ):
     try:
-        # Log the incoming transaction data
+        # logging transaction creation request for auditing
         log_request_info(request, transaction.dict())
         
-        # Create transaction object with current timestamp if not provided
+        # preparing new transaction record with default status
         db_transaction = TransactionModel(
             customer=transaction.customer,
             timestamp=transaction.timestamp or datetime.utcnow(),
-            status=TransactionStatus.SUBMITTED,  # Always start with submitted status
+            status=TransactionStatus.SUBMITTED,  # initial default status
             vendor_id=transaction.vendor_id,
             amount=transaction.amount
         )
         
-        # Save to database
+        # storing transaction in the database
         db.add(db_transaction)
         db.commit()
         db.refresh(db_transaction)
         
-        # Convert SQLAlchemy model to dict for proper serialization
+        # formatting database model for API response
         transaction_dict = {
             "id": db_transaction.id,
             "customer": db_transaction.customer,
@@ -163,7 +163,7 @@ async def create_transaction(
         logger.info(f"Transaction created: ID={db_transaction.id}, Customer={transaction.customer}")
         return LoggingJSONResponse(content=transaction_dict, status_code=status.HTTP_201_CREATED, request=request)
     except Exception as e:
-        # Log detailed error for debugging
+        # providing comprehensive error handling with logging
         logger.error(f"Error creating transaction: {str(e)}")
         error_response = {"detail": f"Failed to create transaction: {str(e)}"}
         log_response_info(request, status.HTTP_500_INTERNAL_SERVER_ERROR, error_response)
@@ -172,6 +172,7 @@ async def create_transaction(
             detail=f"Failed to create transaction: {str(e)}"
         )
 
+# API endpoint for retrieving transaction listings with filtering options
 @app.get("/api/transactions", response_model=List[Transaction])
 async def read_transactions(
     request: Request,
@@ -183,13 +184,13 @@ async def read_transactions(
 ):
     query = db.query(TransactionModel)
     
-    # Apply status filter if provided
+    # applying optional status filtering when specified
     if status:
         query = query.filter(TransactionModel.status == status)
     
     db_transactions = query.offset(skip).limit(limit).all()
     
-    # Convert SQLAlchemy models to dicts for proper serialization
+    # transforming database results into API response format
     transactions = []
     for db_transaction in db_transactions:
         transactions.append({
@@ -204,6 +205,7 @@ async def read_transactions(
     logger.info(f"Retrieved {len(transactions)} transactions")
     return LoggingJSONResponse(content=transactions, request=request)
 
+# API endpoint for accessing detailed transaction information with prediction data
 @app.get("/api/transactions/{transaction_id}", response_model=TransactionInDB)
 async def read_transaction(
     transaction_id: int,
@@ -219,7 +221,7 @@ async def read_transaction(
         log_response_info(request, status.HTTP_404_NOT_FOUND, error_response)
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Get the latest prediction for this transaction if it exists
+    # including the most recent fraud detection result when available
     result = db.query(ResultModel).filter(
         ResultModel.transaction_id == transaction_id
     ).order_by(ResultModel.timestamp.desc()).first()
@@ -233,7 +235,7 @@ async def read_transaction(
         "amount": float(transaction.amount)
     }
     
-    # Add prediction data if available
+    # enriching response with fraud analysis when present
     if result:
         transaction_dict["is_fraudulent"] = result.is_fraud
         transaction_dict["confidence"] = float(result.confidence)
@@ -241,6 +243,7 @@ async def read_transaction(
     logger.info(f"Retrieved transaction: ID={transaction_id}")
     return LoggingJSONResponse(content=transaction_dict, request=request)
 
+# API endpoint for updating transaction status
 @app.put("/api/transactions/{transaction_id}", response_model=Transaction)
 async def update_transaction(
     transaction_id: int,
@@ -249,7 +252,7 @@ async def update_transaction(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_role(["admin", "agent"]))
 ):
-    # Log the update request
+    # recording status update request for audit trails
     log_request_info(request, {"transaction_id": transaction_id, "status": status})
     
     transaction = db.query(TransactionModel).filter(TransactionModel.id == transaction_id).first()
@@ -260,12 +263,12 @@ async def update_transaction(
         log_response_info(request, status.HTTP_404_NOT_FOUND, error_response)
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Update status
+    # modifying transaction status in the database
     transaction.status = status
     db.commit()
     db.refresh(transaction)
     
-    # Convert SQLAlchemy model to dict for proper serialization
+    # formatting updated record for API response
     transaction_dict = {
         "id": transaction.id,
         "customer": transaction.customer,
@@ -278,7 +281,7 @@ async def update_transaction(
     logger.info(f"Updated transaction status: ID={transaction_id}, Status={status}")
     return LoggingJSONResponse(content=transaction_dict, request=request)
 
-# Prediction endpoints (ML results)
+# API endpoint for recording fraud detection results
 @app.post("/api/transactions/{transaction_id}/results", response_model=Prediction, status_code=status.HTTP_201_CREATED)
 async def create_prediction(
     transaction_id: int,
@@ -287,10 +290,10 @@ async def create_prediction(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_role(["admin", "agent"]))
 ):
-    # Log the prediction data
+    # logging prediction submission for auditing
     log_request_info(request, prediction.dict())
     
-    # Check if transaction exists
+    # verifying the referenced transaction exists
     transaction = db.query(TransactionModel).filter(TransactionModel.id == transaction_id).first()
     if not transaction:
         logger.warning(f"Transaction not found for prediction: ID={transaction_id}")
@@ -298,7 +301,7 @@ async def create_prediction(
         log_response_info(request, status.HTTP_404_NOT_FOUND, error_response)
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Create result object
+    # preparing fraud analysis result record
     db_result = ResultModel(
         transaction_id=transaction_id,
         is_fraud=prediction.is_fraudulent,
@@ -306,12 +309,12 @@ async def create_prediction(
         timestamp=datetime.utcnow()
     )
     
-    # Save to database
+    # storing prediction in the database
     db.add(db_result)
     db.commit()
     db.refresh(db_result)
     
-    # Convert to response model
+    # formatting database model for API response
     result_dict = {
         "id": db_result.id,
         "transaction_id": db_result.transaction_id,
@@ -323,6 +326,7 @@ async def create_prediction(
     logger.info(f"Prediction created: ID={db_result.id}, Transaction ID={transaction_id}")
     return LoggingJSONResponse(content=result_dict, status_code=status.HTTP_201_CREATED, request=request)
 
+# API endpoint for accessing historical fraud predictions
 @app.get("/api/transactions/{transaction_id}/results", response_model=List[Prediction])
 async def read_transaction_results(
     transaction_id: int,
@@ -330,7 +334,7 @@ async def read_transaction_results(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_role(["admin", "agent"]))
 ):
-    # Check if transaction exists
+    # confirming transaction exists before retrieving results
     transaction = db.query(TransactionModel).filter(TransactionModel.id == transaction_id).first()
     if not transaction:
         logger.warning(f"Transaction not found for results retrieval: ID={transaction_id}")
@@ -338,12 +342,12 @@ async def read_transaction_results(
         log_response_info(request, status.HTTP_404_NOT_FOUND, error_response)
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Get all results for the transaction
+    # retrieving all historical predictions in chronological order
     results = db.query(ResultModel).filter(
         ResultModel.transaction_id == transaction_id
     ).order_by(ResultModel.timestamp.desc()).all()
     
-    # Convert to response model
+    # transforming database records into API response format
     results_list = []
     for result in results:
         results_list.append({
@@ -357,9 +361,10 @@ async def read_transaction_results(
     logger.info(f"Retrieved {len(results)} predictions for transaction: ID={transaction_id}")
     return LoggingJSONResponse(content=results_list, request=request)
 
+# service entry point for direct script execution
 if __name__ == "__main__":
     import uvicorn
-    # Get port from environment variable or use default 8081
+    # determining operational port from environment configuration
     port = int(os.environ.get("TRANSACTION_PORT", 8081))
     print(f"Starting Transaction Service on port {port}")
     uvicorn.run("app.main:app", host="localhost", port=port, reload=True)

@@ -5,18 +5,18 @@ import os
 from datetime import datetime
 from app.models import TransactionStatus
 
-# figure out where to put the db file
+# determining database file location
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'transactions.db')}"
 
-# setup the sql engine thingy, check_same_thread cuz sqlite is weird
+# initializing SQLAlchemy engine with SQLite-specific options
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# this is for making the models work with orm
+# creating base class for ORM models
 Base = declarative_base()
 
-# these are the database tables as classes
+# defining database schema as ORM models
 class TransactionModel(Base):
     __tablename__ = "transactions"
     
@@ -27,7 +27,7 @@ class TransactionModel(Base):
     vendor_id = Column(String, index=True)
     amount = Column(Float)
     
-    # connection to the results table
+    # establishing relationship with results table for ORM
     results = relationship("ResultModel", back_populates="transaction")
 
 
@@ -40,16 +40,16 @@ class ResultModel(Base):
     is_fraud = Column(Boolean)
     confidence = Column(Float)
     
-    # link back to transaction
+    # bidirectional relationship with transaction
     transaction = relationship("TransactionModel", back_populates="results")
 
 
-# run this at startup to create tables if they dont exist
+# creating database tables if they don't exist
 def create_tables():
     Base.metadata.create_all(bind=engine)
 
 
-# this gives a database session and closes it automatically afterwards
+# dependency for providing database session to endpoints
 def get_db():
     db = SessionLocal()
     try:

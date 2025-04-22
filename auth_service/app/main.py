@@ -24,7 +24,7 @@ except ImportError:
 # Create logs directory
 os.makedirs("logs", exist_ok=True)
 
-# Set up logger
+# initializing service logger
 logger = get_logger("auth_service", "auth_service.log")
 
 # Define startup/shutdown events
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
             pass
         logger.info("Auth Service shutting down")
 
-# Create FastAPI app
+# creating FastAPI app
 app = FastAPI(
     title="Authentication Service",
     description="Service for user auth and token management",
@@ -67,7 +67,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Set up CORS
+# configuring CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -76,7 +76,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple function to log request info
+# utility function for request logging
 def log_request_info(request: Request, body=None):
     """Log request information including body if provided"""
     client_ip = request.client.host if request.client else "unknown"
@@ -98,7 +98,7 @@ def log_request_info(request: Request, body=None):
         
     logger.info(f"Request: {json.dumps(log_data)}")
 
-# Simple function to log response info
+# utility function for response logging
 def log_response_info(request: Request, status_code: int, body=None):
     """Log response information including body if provided"""
     client_ip = request.client.host if request.client else "unknown"
@@ -238,7 +238,7 @@ async def remove_user(username: str, token: str, request: Request):
     response_data = {"detail": "User deleted successfully"}
     return LoggingJSONResponse(content=response_data, request=request)
 
-# Run the app if script is executed directly
+# application entry point when executed directly
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("AUTHENTICATION_PORT", 8080))

@@ -4,11 +4,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.logger import get_logger
 
-# setting up where our auth service is. default localhost
+# configuring authentication service URL from environment or defaulting to localhost
 AUTH_SERVICE_URL = os.environ.get("AUTH_SERVICE_URL", "http://localhost:8080")
 security = HTTPBearer()
 
-# setup the logger
+# initializing logger for auth module
 logger = get_logger("transaction_service.auth")
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -18,41 +18,40 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
     token = credentials.credentials
     logger.info(f"Verifying token: {token[:10] if len(token) > 10 else token}...")
     
-    # sometimes ppl send token with Bearer prefix multiple times by mistake
-    # gotta fix that or it wont work
+    # handling multiple Bearer prefixes that can occur with certain clients
     while token.startswith("Bearer "):
         token = token[7:]
     
     logger.info(f"Clean token after removing Bearer prefix: {token[:10] if len(token) > 10 else token}")
     
-    # log what we doing so we can debug
+    # logging inter-service communication for debugging
     print(f"\n[SERVICE-COMM] Transaction -> Auth Service | Verify Token")
     print(f"  Token: {token[:10]}...")
     
     try:
-        # let auth service kno what we checking
+        # preparing request to authentication service
         logger.info(f"Sending verification request to: {AUTH_SERVICE_URL}/verify-token")
         
-        # use aiohttp for async requests cuz its faster
+        # using async HTTP client for non-blocking requests
         async with aiohttp.ClientSession() as session:
-            # try the new endpoint first with query param
+            # attempting verification with primary endpoint
             async with session.get(
                 f"{AUTH_SERVICE_URL}/verify-token",
                 params={"token": token},
-                timeout=10  # dont wait forever
+                timeout=10  # preventing infinite wait on network issues
             ) as response:
-                # save the status for logs
+                # logging response status for diagnostics
                 status_code = response.status
                 logger.info(f"Auth service response status: {status_code}")
                 
-                # print the result so we can see
+                # logging inter-service response
                 print(f"[SERVICE-COMM] Auth Service -> Transaction | Response: {status_code}")
                 
-                # if not 200 then somethings wrong
+                # handling non-successful response
                 if status_code != 200:
                     logger.warning(f"Token verification failed with status {status_code}")
                     
-                    # maybe old endpoint works better?
+                    # falling back to legacy endpoint for backward compatibility
                     logger.info("Trying legacy verification endpoint...")
                     print(f"  Fallback to legacy endpoint: {AUTH_SERVICE_URL}/api/auth/verify")
                     
@@ -71,25 +70,25 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
                         verification_result = await legacy_response.json()
                         print(f"  Legacy response: {verification_result}")
                 else:
-                    # get the json data back
+                    # parsing successful response
                     verification_result = await response.json()
                 
                 logger.info(f"Auth service response body: {str(verification_result)[:100]}")
                 print(f"  Verification result: {verification_result}")
                 
-                # if token not valid gotta tell user
+                # checking token validity from response
                 if not verification_result.get("valid", False):
                     logger.warning("Token reported as invalid by auth service")
                     print(f"  Token invalid: {verification_result.get('error', 'Unknown error')}")
                     
-                    # include any error from auth service
+                    # propagating error from auth service
                     error_detail = verification_result.get("error", "Invalid token")
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail=error_detail
                     )
                 
-                # need to get role to check permissions
+                # extracting role for authorization checks
                 role = verification_result.get("role")
                 
                 if not role:
@@ -118,7 +117,7 @@ def require_role(allowed_roles: list):
     async def role_checker(user_data: dict = Depends(verify_token)):
         role = user_data.get("role")
         
-        # if they dont have right role kick em out
+        # enforcing role-based access control
         if role not in allowed_roles:
             logger.warning(f"Authorization failed: Role {role} not in {allowed_roles}")
             raise HTTPException(

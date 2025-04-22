@@ -10,41 +10,41 @@ def get_logger(name, log_file=None):
         name: Logger name
         log_file: Optional file to log to
     """
-    # make a logger with the name
+    # creating logger instance with given name
     logger = logging.getLogger(name)
     
-    # skip if we already setup this logger before
+    # returning already configured logger to avoid duplicate handlers
     if logger.handlers:
         return logger
     
-    # set how detailed the logs should be
+    # configuring minimum log level
     logger.setLevel(logging.INFO)
     
-    # how the logs gonna look
+    # setting up log message format
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
-    # put logs in console so we can see em
+    # adding console output for immediate visibility
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(formatter)
     logger.addHandler(console)
     
-    # also put in file if they asked for that
+    # adding file logging if specified
     if log_file:
-        # make sure we got a logs folder
+        # creating logs directory if needed
         logs_dir = os.path.join(os.getcwd(), "logs")
         os.makedirs(logs_dir, exist_ok=True)
         
-        # figure out the whole path to log file
+        # resolving full path to log file
         log_path = os.path.join(logs_dir, log_file)
         
-        # this handler writes to the file
+        # configuring file output handler
         file_handler = logging.FileHandler(log_path)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     
     return logger
 
-# this add extra info to our logs
+# custom filter for adding request metadata to log entries
 class RequestResponseFilter(logging.Filter):
     """
     Add request/response context to log records
@@ -55,7 +55,7 @@ class RequestResponseFilter(logging.Filter):
         self.destination = destination
     
     def filter(self, record):
-        # add the extra stuff to each log entry
+        # enriching log record with request context data
         record.source = self.source or "-"
         record.destination = self.destination or "-"
         return True
