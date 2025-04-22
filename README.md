@@ -5,6 +5,12 @@ A distributed microservices application for financial transaction management wit
 1. **Authentication Service**: User authentication and token-based security
 2. **Transaction Service**: Financial transaction management and fraud prediction
 
+## System Stack
+- **FastAPI**: It was an interesting choice for us, because it was a new thing to explore for us. It is said to be fast comparable to others. While being easy to use and intuitive, it was still robust using Python type hints for data validation, serialization, and deserialization right out of the box, leading to fewer bugs.   
+It automatically generates interactive API documentation (Swagger UI and ReDoc) based on our code. It has automatic OpenAPI documentation and native async support.
+
+- For other technology stack choices, please refer 
+
 ## System Requirements
 
 - Python 3.8 or higher
@@ -56,7 +62,9 @@ Please refer to TEST_COMMANDS.MD
 │       └── logger.py     # Logging configuration
 │
 ├── requirements.txt      # Project dependencies
-└── README.md             # This documentation
+├── documentation.txt      # Documentation
+├── TEST_COMMANDS.md      # Testing commands
+└── README.md             # This file
 ```
 
 ## Technology Choices
@@ -69,6 +77,7 @@ Please refer to TEST_COMMANDS.MD
 
 ## Common Issues
 
+- As we used two different OS (macOS and windows), we faced a couple of issues in PORTS, modules, and CLIs. Thus we ended up providing two CLI syntaxes and all OS compatible modules. Our test users managed PowerShell on windows.
 - If you encounter module import errors, ensure you're running using the module syntax (`python -m auth_service.app.main`)
 - For Windows users, ensure bcrypt is properly installed with `pip install bcrypt>=3.2.2`
 

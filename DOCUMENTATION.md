@@ -17,38 +17,35 @@
 
 ## Introduction
 
-This document provides technical details about the Fraud Detection and Authentication System, a distributed application built using modern microservices architecture. The system allows financial institutions to process transactions while automatically detecting potentially fraudulent activities.
 
 The documentation is structured to first provide a high-level overview of the system architecture, followed by detailed explanations of each service, their implementations, and how they communicate with each other. Finally, we discuss the current limitations and potential future improvements.
+This document provides technical details about a distributed application built using modern microservices architecture. 
 
 ## System Architecture
 
-The system follows a microservices architecture with two primary services:
+The split system follows a microservices architecture with two primary independent services:
 
 1. **Authentication Service**: Responsible for user management, authentication, and token generation
 2. **Transaction Service**: Handles transaction data and prediction results storage
 
-These services are designed to operate independently, communicating via HTTP APIs, which allows for:
-- Independent scaling based on load
-- Isolated failure domains
-- Technology flexibility
-- Focused development teams
+These services are designed to operate independently, communicating via APIs.
 
 ### Technology Stack
 
 The system is built using the following technologies:
 
-- **FastAPI**: Chosen for its high performance, automatic OpenAPI documentation, and native async support. It provides a modern, Python-based framework for building APIs with minimal boilerplate code.
+- **FastAPI**: It was an interesting choice for us, because it was a new thing to explore for us. It is said to be fast comparable to others. While being easy to use and intuitive, it was still robust using Python type hints for data validation, serialization, and deserialization right out of the box, leading to fewer bugs.   
+It automatically generates interactive API documentation (Swagger UI and ReDoc) based on our code. It has automatic OpenAPI documentation and native async support.
 
 - **SQLAlchemy**: Used for database interaction in the Transaction Service, providing a robust ORM layer that simplifies database operations and provides a consistent API regardless of the underlying database technology.
 
 - **Passlib/bcrypt**: Implemented for secure password hashing in the Authentication Service. Bcrypt is specifically chosen for its adaptive nature and resistance to brute-force attacks.
 
-- **Python-jose**: Used for JWT (JSON Web Token) generation and validation, providing a secure mechanism for cross-service authentication.
+- **Python-jose**: Is our token system JWT (JSON Web Token) for generation and validation, providing a mechanism for cross-service authentication.
 
-- **SQLite**: Selected as the database for the Transaction Service due to its simplicity for demonstration purposes. In a production environment, this would be replaced with a more robust database system.
+- **SQLite**: Selected as the database for the Transaction Service for simplicity for demonstration purposes. 
 
-- **Pydantic**: Used for data validation and settings management, ensuring type safety and providing automatic validation for incoming request data.
+- **Pydantic**: Providing validation for incoming request data.
 
 ## Authentication Service
 
@@ -62,9 +59,9 @@ The Authentication Service is responsible for managing user identity and access 
   - Handles password hashing and verification
 
 - **Token Management (auth.py)**:
-  - Generates JWT tokens upon successful authentication
-  - Validates tokens for protected endpoints
-  - Maintains token expiration and revocation
+  - Generates JWT tokens upon successful authentication;
+  - validates tokens for protected endpoints; and
+  - handles token expiration and revocation
 
 - **API Endpoints (main.py)**:
   - `/api/auth/login`: Authenticates users and issues tokens
@@ -95,11 +92,10 @@ def create_access_token(username: str, role: str, expires_delta: timedelta = Non
     return encoded_jwt
 ```
 
-Password security is implemented using bcrypt hashing, which provides strong protection against various attack vectors including rainbow tables and brute force attempts.
 
 ## Transaction Service
 
-The Transaction Service manages financial transaction data and prediction results, implementing persistent storage using SQLite and SQLAlchemy.
+The Transaction Service manages financial transaction data and prediction results, implementing mechanisms for caching using SQLite and SQLAlchemy.
 
 ### Key Components
 

@@ -15,7 +15,7 @@ The services expose REST APIs documented with Swagger UI. Access the /docs endpo
 
 
 
-This document provides curl commands to test both services once they are running. You'll need to use 3 terminal windows. One of them for Curl commands running the methods, and two terminals only for initiating the services (one for each service).
+This document provides curl commands to test both services once they are running. You'll need to use 3 terminal windows; one of them for Curl commands running the methods, and two terminals only for initiating the services (one for each service).
 
 
 Terminal 1 (Auth Service):
@@ -34,7 +34,7 @@ Once the services are initiated, you could either use the swagger UI available a
 - Authentication Service: http://localhost:8080/docs
 - Transaction Service: http://localhost:8081/docs
 
-or you could, as we did, continue with the CLI using Powershell syntax as follows (Bash syntax at the end):
+or you could, as we did for OS convenience, continue with the CLI using Powershell syntax as follows (Bash syntax at the end):
 
 ## Test Authentication Service
 
