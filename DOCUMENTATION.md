@@ -78,19 +78,6 @@ The Authentication Service is responsible for managing user identity and access 
 
 The Authentication Service uses a simple in-memory data store for user information, initialized with default users during startup. In a production environment, this would be replaced with a persistent database.
 
-```python
-# Example token generation process (simplified)
-def create_access_token(username: str, role: str, expires_delta: timedelta = None):
-    to_encode = {"sub": username, "role": role}
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-```
-
 
 ## Transaction Service
 
