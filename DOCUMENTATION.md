@@ -213,7 +213,6 @@ Each service has its own independent logging system with the following component
 Every logged request contains the following fields:
 
 - **timestamp**: ISO-8601 formatted date and time
-- **request_id**: Unique UUID for correlating requests across services
 - **source**: Client IP address and port (or service name for inter-service calls)
 - **destination**: Service name, port, and endpoint path
 - **method**: HTTP method (GET, POST, PUT, DELETE)
